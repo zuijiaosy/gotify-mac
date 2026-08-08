@@ -1,0 +1,14 @@
+services:
+  gotify:
+    image: gotify/server:2.7.3
+    container_name: gotify
+    restart: unless-stopped
+    ports:
+      - "18080:80"
+    environment:
+      # 本地开发默认账号，与 Gotify 官方默认一致；生产部署必须修改
+      - GOTIFY_DEFAULTUSER_NAME=admin
+      - GOTIFY_DEFAULTUSER_PASS=admin
+      - TZ=Asia/Shanghai
+    volumes:
+      - ./data:/app/data

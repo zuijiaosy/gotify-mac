@@ -1,0 +1,32 @@
+# Xcode user data
+xcuserdata/
+*.xcuserstate
+*.xccheckout
+*.xcscmblueprint
+
+# Build output
+build/
+DerivedData/
+*.ipa
+*.dSYM.zip
+*.dSYM
+
+# Swift Package Manager
+.build/
+.swiftpm/
+
+# macOS
+.DS_Store
+
+# Local Gotify server data (contains tokens and messages)
+deploy/gotify/data/
+
+# Local configuration and secrets
+.env
+.env.*
+!.env.example
+*.xcconfig.local
+Secrets.xcconfig
+
+# CodeGraph local index
+.codegraph/
