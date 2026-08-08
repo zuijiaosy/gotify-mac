@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Gotify Mac 是一个面向 macOS 的 Gotify 原生客户端（Swift + SwiftUI 菜单栏应用）。
 
-工程形式是 **SwiftPM + 打包脚本，没有 Xcode 工程**（开发机只有 Command Line Tools，见 ADR-007）。最低支持 macOS 14（ADR-006）。目前已有菜单栏骨架、本地配置读取和连接状态检查；REST 封装、WebSocket、消息列表、通知均未实现——实际进度以 `docs/CURRENT_STATE.md` 为准，不要根据架构文档假设模块已存在。
+工程形式是 **SwiftPM + 打包脚本，没有 Xcode 工程**（开发机只有 Command Line Tools，见 ADR-007）。最低支持 macOS 14（ADR-006）。MVP 已实现：REST 加载、菜单栏面板（单栏列表↔双栏详情）、WebSocket 实时接收与重连补拉、系统通知。实际进度以 `docs/CURRENT_STATE.md` 为准。
 
 ## 常用命令
 
@@ -19,9 +19,11 @@ open "build/Gotify Mac.app"  # 运行菜单栏应用
 # 本地 Gotify 服务端（Docker，http://127.0.0.1:18080，管理界面账号 admin/admin）
 docker compose -f deploy/gotify/docker-compose.yml up -d
 docker compose -f deploy/gotify/docker-compose.yml down
-```
 
-尚无测试 target；添加后用 `swift test` 运行，并更新本节。
+scripts/test.sh                # 运行测试（不要直接 swift test：CLT 环境需要额外的 Testing.framework 路径，脚本已封装）
+GOTIFY_E2E=1 scripts/test.sh   # 含打真实本地服务端的集成测试
+scripts/e2e-ui-check.sh        # 半自动端到端 UI 验证（需终端有辅助功能+屏幕录制权限）
+```
 
 本机 8080 端口被 nginx/OrbStack 占用，所以服务端映射到 18080，不要改回 8080。
 
@@ -43,15 +45,16 @@ docker compose -f deploy/gotify/docker-compose.yml down
 
 ## 代码布局
 
-- `Package.swift` — executable target `GotifyMac`，platforms 定为 `.macOS(.v14)`。
-- `Sources/GotifyMac/` — 应用代码：`GotifyMacApp.swift`（`MenuBarExtra` 入口）、`AppConfig.swift`（config.json 读取）、`AppModel.swift`（连接状态检查）。
+- `Package.swift` — executable target `GotifyMac` + testTarget `GotifyMacTests`，platforms 定为 `.macOS(.v14)`。
+- `Sources/GotifyMac/` — `GotifyMacApp.swift`（`MenuBarExtra` .window 入口）、`AppConfig.swift`（config.json 读取）、`AppModel.swift`（协调者：连接状态机/流生命周期/选中态）、`GotifyClient.swift`（REST）、`GotifyStream.swift`（WebSocket + 重连退避）、`MessageStore.swift`（去重/降序/200 条上限）、`NotificationService.swift`（系统通知）、`Views/`（PanelView/MessageRowView/MessageDetailView）。
+- `Tests/GotifyMacTests/` — Swift Testing 单元测试 + `GOTIFY_E2E=1` 门控的集成测试。
 - `Support/Info.plist` — bundle 配置（`LSUIElement=true` 隐藏 Dock 图标）。
-- `scripts/build-app.sh` — 组装 `.app` 的打包脚本。
+- `scripts/` — `build-app.sh`（组装 .app）、`test.sh`（测试包装）、`e2e-ui-check.sh`（半自动 UI 验证）。
 - `deploy/gotify/` — 本地 Gotify 服务端 docker-compose；`data/` 子目录含数据库（内含 Token），已 gitignore，不得提交。
 
-## 目标模块边界（尚未实现）
+## 模块边界（已实现，改动时保持）
 
-Configuration/Keychain → Networking（REST + WebSocket 生命周期）→ Message Store（合并/排序/去重，暴露可观察状态）→ Notification Service（系统通知，防重连重复通知）→ SwiftUI Menu Bar UI。UI 只通过状态与服务接口协作，不直接发请求或读 Token。
+Configuration → Networking（GotifyClient REST + GotifyStream WebSocket 生命周期）→ MessageStore（合并/排序/去重，纯逻辑）→ NotificationService（仅对 insert 成功的新消息通知）→ SwiftUI 面板。UI 只通过 AppModel 的状态协作，不直接发请求或读 Token；测试用 Swift Testing（不是 XCTest），网络经 `HTTPDataFetching` 协议注入。
 
 ## 文档同步规则（摘要，完整规则见 AGENTS.md）
 

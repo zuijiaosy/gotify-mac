@@ -4,16 +4,18 @@ Updated: 2026-08-08
 
 ## 当前实现
 
-已实现的部分（详见 ADR-006/ADR-007）：
+MVP 已实现（详见 ADR-006/007/008）：
 
-- SwiftPM 工程骨架：`Package.swift`（executable target `GotifyMac`，最低 macOS 14）。
-- 菜单栏应用入口：`Sources/GotifyMac/GotifyMacApp.swift`，使用 SwiftUI `MenuBarExtra`，显示服务器地址、连接状态、重新检查和退出。
-- 配置读取 `AppConfig.swift`：从 `~/Library/Application Support/GotifyMac/config.json` 读取服务器地址与 Client Token（ADR-008），默认服务器 `http://127.0.0.1:18080`。
-- 连接检查 `AppModel.swift`：用 Client Token 调用 `GET /current/user` 验证服务器可达与 Token 有效，结果显示在菜单中。
-- 打包脚本 `scripts/build-app.sh`：`swift build` 后组装 `build/Gotify Mac.app`（复制 `Support/Info.plist`，ad-hoc 签名，`LSUIElement` 隐藏 Dock 图标）。
-- 本地开发服务端：`deploy/gotify/docker-compose.yml`（Gotify 2.7.3，宿主端口 18080，数据卷 `deploy/gotify/data/` 已被 gitignore）。
+- **Configuration**：`AppConfig.swift` 从 `~/Library/Application Support/GotifyMac/config.json` 读取服务器地址与 Client Token（ADR-008）。
+- **Networking**：`GotifyClient.swift`（REST：current/user、application、message 分页与补拉，`HTTPDataFetching` 协议注入可测）；`GotifyStream.swift`（WebSocket /stream，AsyncStream 封装，ping 确认握手，指数退避重连 1s→60s ±20% 抖动，取消即断开）。
+- **Message Store**：`MessageStore.swift`，纯逻辑 struct，按 id 去重/降序/保留最近 200 条（不落盘，符合 ADR-002），`merge` 返回真正新增项供通知判断。
+- **Notification Service**：`NotificationService.swift`，UNUserNotificationCenter 封装；非 .app 环境（swift run/测试进程）自动降级不触碰 UN API；`willPresent` 保证前台横幅；仅对 `insert` 成功的新消息通知。
+- **协调者**：`AppModel.swift`（@MainActor @Observable），连接状态机（checking/unconfigured/connected/reconnecting/failed）、初始 REST 加载、流生命周期、重连后 `messagesNewer` 补拉、面板选中态。
+- **UI**：`Views/PanelView.swift`（MenuBarExtra `.window` 样式，单栏 360 ↔ 双栏 240+400 两档定宽硬切）、`MessageRowView.swift`（优先级色点 ≥8 红/4-7 橙/1-3 蓝/0 灰）、`MessageDetailView.swift`（详情/复制/返回）。
+- **测试**：`Tests/GotifyMacTests/` 单元测试 + `GOTIFY_E2E=1` 门控集成测试（打真实 docker 服务端）；`scripts/test.sh` 包装 CLT 环境所需的 Testing.framework 路径；`scripts/e2e-ui-check.sh` 半自动 UI 截图验证。
+- 打包 `scripts/build-app.sh` / 一键启动 `start.sh`；本地服务端 `deploy/gotify/docker-compose.yml`（2.7.3，端口 18080）。
 
-Networking（REST 封装与 WebSocket）、Message Store、Notification Service、配置编辑界面均未实现；当前连接检查是临时的最小实现，后续应并入 Networking 模块。
+尚未实现：应用内配置编辑界面（只能手工编辑 config.json）、系统睡眠/唤醒专门处理（当前依赖重连退避兜底）、登录自启动、已读状态。
 
 本文件以下内容是第一版的**目标架构基线**，用于约束后续实现；代码落地后，必须根据真实实现更新，并将已经实现与尚未实现的部分分开描述。
 

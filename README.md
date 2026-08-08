@@ -2,17 +2,17 @@
 
 Gotify Mac 是一个面向 macOS 的 Gotify 原生客户端项目。
 
-当前仓库已有一个最小可运行的菜单栏应用骨架（SwiftPM 工程，无 Xcode 工程），业务功能尚未实现。仓库中的实现与文档将作为项目现状的唯一事实来源；历史聊天只用于解释需求背景和设计原因。
+MVP 已实现（SwiftPM 工程，无 Xcode 工程）：菜单栏面板展示消息列表与详情、REST 加载、WebSocket 实时接收与断线重连补拉、系统通知。仓库中的实现与文档是项目现状的唯一事实来源；历史聊天只用于解释需求背景和设计原因。
 
-## 项目目标
+## 功能
 
-- 使用 Swift 与 SwiftUI 构建原生 macOS 客户端。
-- 通过 Gotify REST API 获取应用与消息。
-- 通过 Gotify WebSocket stream 接收实时消息。
-- 使用 macOS 系统通知展示新消息。
+- Swift + SwiftUI 原生菜单栏应用（`MenuBarExtra` window 面板，单栏列表 ↔ 双栏详情）。
+- 通过 Gotify REST API 加载应用与消息，优先级四档色点（≥8 红、4-7 橙、1-3 蓝、0 灰）。
+- 通过 Gotify WebSocket stream 实时接收消息，断线指数退避重连并补拉遗漏消息。
+- 新消息弹 macOS 系统通知（应用在前台也弹横幅）。
 - 服务器地址与 Client Token 存放在仓库之外的本地配置文件 `~/Library/Application Support/GotifyMac/config.json`，不写入源码或 Git。
 
-这些目标尚不代表已经实现。实际进度以 [`docs/CURRENT_STATE.md`](docs/CURRENT_STATE.md) 为准。
+实际进度以 [`docs/CURRENT_STATE.md`](docs/CURRENT_STATE.md) 为准。
 
 ## 项目文档
 
@@ -39,9 +39,17 @@ docker compose -f deploy/gotify/docker-compose.yml up -d
 
 服务地址 `http://127.0.0.1:18080`（8080 被本机其他服务占用），Web 管理界面默认账号 `admin/admin`。数据保存在 `deploy/gotify/data/`（已 gitignore，内含 Token，不得提交）。
 
+## 测试
+
+```bash
+scripts/test.sh                # 单元测试（CLT 环境必须用此脚本，不要直接 swift test）
+GOTIFY_E2E=1 scripts/test.sh   # 含打真实本地服务端的集成测试
+scripts/e2e-ui-check.sh        # 半自动端到端 UI 验证（需终端有辅助功能+屏幕录制权限）
+```
+
 ## 当前阶段
 
-菜单栏应用已能读取本地配置并显示与本地 Gotify 服务端的连接状态，下一步是实现 REST API 消息加载和 WebSocket 实时接收。开始编码前，请先阅读上述项目文档。
+MVP 完成。后续迭代方向：应用内设置界面、登录自启动、睡眠/唤醒处理。开始编码前，请先阅读上述项目文档。
 
 ## 安全约定
 
