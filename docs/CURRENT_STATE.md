@@ -24,6 +24,8 @@ Updated: 2026-08-09
 
 - Codex 多轮对抗审查 6 轮共 17 条发现，全部核实为真并修复（含连接恢复、通知恰好一次语义、并发竞态、测试隔离等）。
 
+- **Markdown 正文渲染（2026-08-09，ADR-010）**：解析 `extras.client::display.contentType`，详情页渲染加粗/斜体/行内代码/链接/无序列表/ATX 标题，列表行与通知横幅显示剥标记后的纯文本；畸形 extras 降级为纯文本且不影响整条消息解码。测试 58 个用例全绿（新增 21 个，含畸形 extras 参数化与 markdown 端到端）。动因：codexzh / cczh / auto-gpt-plus 三个项目把管理员通知从邮件迁到 Gotify，正文改用 Markdown。
+
 ## In Progress
 
 - 设置窗口手工验收剩余项（截图已确认：窗口可打开前置、TabView 为顶部工具栏标签样式、连接状态正常，见 `docs/screenshots/`）：

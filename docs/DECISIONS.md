@@ -171,3 +171,24 @@ Gotify Client Token 必须存储在 macOS Keychain，不写入源码、普通偏
 
 - 未来给 AppConfig 加字段必须提供默认值并走 decodeIfPresent，保证旧文件兼容。
 - 手工编辑 config.json 仍然有效，但应用一旦保存设置会重写整个文件（未知字段会被丢弃）。
+
+## ADR-010：Markdown 正文按行拆分渲染，摘要与详情分离
+
+- Status: Accepted
+- Date: 2026-08-09
+
+### Decision
+
+支持发送方通过 `extras.client::display.contentType = text/markdown` 声明正文为 Markdown。渲染不直接用 `AttributedString(markdown:)` 的 `.full` 模式，改为「按行拆分 → 块级标记自己转换 → 每行用 `.inlineOnlyPreservingWhitespace` 交系统解析行内语法」。列表行与系统通知横幅无法渲染富文本，改用剥掉标记的纯文本摘要。
+
+### Rationale
+
+实测 `.full` 模式会丢弃全部换行，且列表结构只落在 SwiftUI `Text` 不渲染的 `PresentationIntent` 上，多行通知会被挤成一行；`.inlineOnlyPreservingWhitespace` 保留换行且能解析行内语法，但 `- `、`# ` 这类块级标记保持字面量，因此块级部分自己处理。
+
+剥标记只匹配成对标记，单标记斜体额外要求外侧非字母数字（近似 CommonMark flanking 规则），避免误伤 `user_id`、`2*3` 这类内容。
+
+### Consequences
+
+- 支持范围：加粗、斜体、行内代码、链接、无序列表、ATX 标题。表格、围栏代码块、嵌套列表、图片、HTML 按字面量显示。
+- 详情页与摘要走两条路径，新增行内语法支持时两边都要改，否则详情能渲染而摘要残留标记。
+- 零第三方依赖，全部基于 Foundation。

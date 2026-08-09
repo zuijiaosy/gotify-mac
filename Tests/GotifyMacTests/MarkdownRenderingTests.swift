@@ -69,9 +69,20 @@ import Testing
         #expect(MarkdownRenderer.plainPreview("订单 `P2025` 已支付") == "订单 P2025 已支付")
     }
 
-    @Test(arguments: ["user_id: 42", "a*b*c 与 2*3", "snake_case_name"])
+    @Test(arguments: ["user_id: 42", "a*b*c 与 2*3", "snake_case_name", "3 * 4 = 12"])
     func 不误伤裸下划线与星号(input: String) {
         #expect(MarkdownRenderer.plainPreview(input) == input)
+    }
+
+    @Test(arguments: [("*斜体*", "斜体"), ("_斜体_", "斜体"), ("金额 *偏低* 请注意", "金额 偏低 请注意")])
+    func 剥掉单标记斜体(input: String, expected: String) {
+        #expect(MarkdownRenderer.plainPreview(input) == expected)
+    }
+
+    /// 详情页能渲染的行内语法，摘要里就不该残留标记
+    @Test func 摘要不残留任何成对标记() {
+        let raw = "**加粗** 与 *斜体* 与 `代码` 与 [链接](https://a.com)"
+        #expect(MarkdownRenderer.plainPreview(raw) == "加粗 与 斜体 与 代码 与 链接")
     }
 
     // MARK: - previewText 门控
