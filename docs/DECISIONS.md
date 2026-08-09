@@ -192,3 +192,48 @@ Gotify Client Token 必须存储在 macOS Keychain，不写入源码、普通偏
 - 支持范围：加粗、斜体、行内代码、链接、无序列表、ATX 标题。表格、围栏代码块、嵌套列表、图片、HTML 按字面量显示。
 - 详情页与摘要走两条路径，新增行内语法支持时两边都要改，否则详情能渲染而摘要残留标记。
 - 零第三方依赖，全部基于 Foundation。
+
+## ADR-011：本地已读状态用单一水位线，存 config.json
+
+- Status: Accepted
+- Date: 2026-08-09
+
+### Decision
+
+已读状态不逐条记录，只持久化一个 `lastReadMessageID` 水位线（AppConfig 新字段）：id 大于水位线的消息视为未读；「全部已读」把水位线推到当前最大消息 id。仅本地生效（符合 ADR-003），不新开状态文件，复用 config.json 的读写机制（ADR-009 的容错解码与 600 权限）。serverURL|token 身份变化时水位线归零并落盘——旧服务器的消息 id 对新服务器无意义。
+
+### Rationale
+
+- 用户的使用方式是"看完点一下全部已读，下次知道从哪条开始看"，水位线正好是这个心智模型；Gotify 消息 id 单调递增使其成立。
+- 逐条已读集合需要随 200 条裁剪同步清理、体积无上界，复杂度不匹配需求。
+- 水位线语义上更接近用户偏好而非缓存数据，放 config.json 可复用现成持久化路径，代价是配置文件里多一个应用维护的字段。
+
+### Consequences
+
+- 无法表达"跳着读"（新消息已读、旧消息未读），若将来需要逐条已读须新增 ADR。
+- 手工编辑 config.json 时该字段会被应用改写（点全部已读或换服务器时）。
+
+## ADR-012：放弃系统通知横幅，以菜单栏未读圆点为唯一提醒
+
+- Status: Accepted（替代同日拟定的 "Apple Development 证书签名" 方案）
+- Date: 2026-08-09
+
+### Decision
+
+不再追求让 `UNUserNotificationCenter` 系统通知横幅可用：构建保持 ad-hoc 签名，不引入任何证书。新消息的提醒方式为菜单栏图标的未读圆点/角标（ADR-011 的已读水位线机制）。通知相关 UI 入口全部移除（面板工具栏的 `bell.slash` 警示图标、设置窗口「通知」标签）；`NotificationService` 与 `notificationsEnabled`/`soundEnabled` 配置字段保留：在授权可用的环境（如他人用有效证书自行构建）仍会发横幅，本机授权失败时静默降级。
+
+### Rationale
+
+macOS 26 上完整排查结论：
+
+1. ad-hoc 与 openssl 自签名证书（即使加入用户信任列表）请求授权被系统直接拒绝（"Notifications are not allowed for this application"）。
+2. 换用免费 Apple ID 的 Apple Development 证书（Apple 根证书链）后，授权弹窗可以出现——但系统把"拒绝"记录绑定在**应用路径**上且不出现在 系统设置→通知 中，一旦横幅被划掉或误点，该路径便永久无法再弹窗，只能换全新路径+全新 bundle ID 重来。
+3. 上述流程对一个个人自用工具过于脆弱繁琐（装 12GB Xcode、证书年检、路径/ID 不能复用），用户裁定收益不值得，未读圆点已满足提醒需求。
+
+### Consequences
+
+- 本机不会有系统通知横幅与提示音；提醒完全依赖菜单栏未读圆点。
+- 通知开关不再有 UI，只能手工编辑 config.json 的 `notificationsEnabled`/`soundEnabled`（仅对授权可用的环境有意义）。
+- 无需 Xcode、无需任何证书，回到纯 CLT + SwiftPM 工作流（ADR-007 完整保持）。
+- 若将来 macOS 放宽限制或用户改用有效证书，功能无需改代码即可恢复。
+- 排查过程中生成的钥匙串项（Apple Development 证书、WWDR G3 中间证书）无害保留。

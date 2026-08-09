@@ -10,8 +10,6 @@ struct SettingsView: View {
         TabView {
             ServerSettingsTab(model: model)
                 .tabItem { Label("服务器", systemImage: "server.rack") }
-            NotificationSettingsTab(model: model)
-                .tabItem { Label("通知", systemImage: "bell.badge") }
         }
         .frame(width: 440)
         .onAppear { activateSettingsWindow() }

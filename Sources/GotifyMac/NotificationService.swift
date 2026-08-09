@@ -8,7 +8,7 @@ import UserNotifications
 @Observable
 final class NotificationService: NSObject, UNUserNotificationCenterDelegate {
     private(set) var available = false
-    /// 非空表示通知不可用及原因，面板工具栏展示
+    /// 非空表示通知不可用及原因（UI 已不展示，见 ADR-012，仅内部/测试使用）
     private(set) var statusHint = ""
 
     func setUp() async {
