@@ -1,5 +1,10 @@
 import SwiftUI
 
+/// 正文渲染方式，由 extras 的 client::display.contentType 决定
+enum MessageContentType: Sendable, Equatable {
+    case plain, markdown
+}
+
 /// Gotify 消息（GET /message 与 WebSocket /stream 共用同一 JSON 结构）
 struct GotifyMessage: Codable, Identifiable, Hashable, Sendable {
     let id: Int
@@ -8,6 +13,18 @@ struct GotifyMessage: Codable, Identifiable, Hashable, Sendable {
     let message: String
     let priority: Int?
     let date: Date
+    let extras: MessageExtras?
+
+    init(id: Int, appid: Int, title: String?, message: String,
+         priority: Int?, date: Date, extras: MessageExtras? = nil) {
+        self.id = id
+        self.appid = appid
+        self.title = title
+        self.message = message
+        self.priority = priority
+        self.date = date
+        self.extras = extras
+    }
 
     var displayTitle: String {
         let t = title ?? ""
@@ -15,6 +32,53 @@ struct GotifyMessage: Codable, Identifiable, Hashable, Sendable {
     }
 
     var displayPriority: Int { priority ?? 0 }
+
+    /// 未声明或声明为其它类型时一律按纯文本处理，保证旧消息行为不变
+    var contentType: MessageContentType {
+        let raw = extras?.clientDisplay?.contentType?
+            .trimmingCharacters(in: .whitespaces)
+            .lowercased()
+        return raw == "text/markdown" ? .markdown : .plain
+    }
+}
+
+/// 消息扩展字段。extras 是任意嵌套 JSON，这里只定向解析约定键 client::display，
+/// 其余内容忽略。两级 init(from:) 都不抛错：extras 畸形时降级为 nil，绝不能让
+/// 整条消息解码失败——GotifyStream.decode 用 try? 解码，抛错会导致实时消息被静默丢弃。
+struct MessageExtras: Codable, Hashable, Sendable {
+    let clientDisplay: ClientDisplay?
+
+    struct ClientDisplay: Codable, Hashable, Sendable {
+        let contentType: String?
+
+        init(contentType: String?) {
+            self.contentType = contentType
+        }
+
+        init(from decoder: Decoder) {
+            guard let container = try? decoder.container(keyedBy: CodingKeys.self) else {
+                contentType = nil
+                return
+            }
+            contentType = try? container.decodeIfPresent(String.self, forKey: .contentType)
+        }
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case clientDisplay = "client::display"
+    }
+
+    init(clientDisplay: ClientDisplay?) {
+        self.clientDisplay = clientDisplay
+    }
+
+    init(from decoder: Decoder) {
+        guard let container = try? decoder.container(keyedBy: CodingKeys.self) else {
+            clientDisplay = nil
+            return
+        }
+        clientDisplay = try? container.decodeIfPresent(ClientDisplay.self, forKey: .clientDisplay)
+    }
 }
 
 /// Gotify 应用（GET /application）

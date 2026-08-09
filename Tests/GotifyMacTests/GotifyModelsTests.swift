@@ -56,6 +56,54 @@ import Testing
         #expect(PriorityTier(priority: priority) == expected)
     }
 
+    @Test func extras声明markdown时识别为markdown() throws {
+        let json = """
+        {"id":9,"appid":1,"message":"**用户**: a@b.com","title":"充值成功","priority":5,
+         "date":"2026-08-08T10:00:00Z",
+         "extras":{"client::display":{"contentType":"text/markdown"}}}
+        """
+        let message = try JSONDecoder.gotify.decode(GotifyMessage.self, from: Data(json.utf8))
+        #expect(message.contentType == .markdown)
+    }
+
+    @Test func 无extras为纯文本() throws {
+        let page = try JSONDecoder.gotify.decode(PagedMessages.self, from: Data(Self.pagedJSON.utf8))
+        #expect(page.messages.allSatisfy { $0.contentType == .plain })
+    }
+
+    @Test func 有其它extras键但无clientDisplay为纯文本() throws {
+        let json = #"{"id":1,"appid":1,"message":"x","date":"2026-08-08T10:00:00Z","extras":{"android::action":{"onReceive":{"intentUrl":"x"}}}}"#
+        let message = try JSONDecoder.gotify.decode(GotifyMessage.self, from: Data(json.utf8))
+        #expect(message.contentType == .plain)
+    }
+
+    @Test(arguments: ["TEXT/MARKDOWN", "Text/Markdown", " text/markdown "])
+    func contentType大小写与空白不敏感(raw: String) throws {
+        let json = """
+        {"id":1,"appid":1,"message":"x","date":"2026-08-08T10:00:00Z",
+         "extras":{"client::display":{"contentType":"\(raw)"}}}
+        """
+        let message = try JSONDecoder.gotify.decode(GotifyMessage.self, from: Data(json.utf8))
+        #expect(message.contentType == .markdown)
+    }
+
+    /// extras 畸形绝不能让整条消息解码失败：WebSocket 帧用 try? 解码，抛错会静默丢消息
+    @Test(arguments: [
+        #""extras":123"#,
+        #""extras":null"#,
+        #""extras":"x""#,
+        #""extras":[]"#,
+        #""extras":{"client::display":"x"}"#,
+        #""extras":{"client::display":{"contentType":5}}"#,
+        #""extras":{"client::display":{}}"#,
+    ])
+    func 畸形extras降级为纯文本且不抛错(fragment: String) throws {
+        let json = #"{"id":1,"appid":1,"message":"x","date":"2026-08-08T10:00:00Z",\#(fragment)}"#
+        let message = try JSONDecoder.gotify.decode(GotifyMessage.self, from: Data(json.utf8))
+        #expect(message.contentType == .plain)
+        #expect(message.message == "x")
+    }
+
     @Test func 解码应用列表() throws {
         let json = #"[{"id":1,"token":"A9K","name":"测试应用","description":"本地联调用","internal":false,"image":"static/defaultapp.png","defaultPriority":0}]"#
         let apps = try JSONDecoder.gotify.decode([GotifyApplication].self, from: Data(json.utf8))

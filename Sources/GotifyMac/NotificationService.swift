@@ -34,7 +34,7 @@ final class NotificationService: NSObject, UNUserNotificationCenterDelegate {
         guard available else { return }
         let content = UNMutableNotificationContent()
         content.title = "\(appName): \(message.displayTitle)"
-        content.body = message.message
+        content.body = message.previewText
         content.sound = sound ? .default : nil
         let request = UNNotificationRequest(
             identifier: "gotify-message-\(message.id)",  // 同 id 不重复通知的兜底

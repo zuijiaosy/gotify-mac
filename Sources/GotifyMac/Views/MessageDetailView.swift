@@ -10,7 +10,7 @@ struct MessageDetailView: View {
                 header(message)
                 Divider()
                 ScrollView {
-                    Text(message.message)
+                    bodyText(message)
                         .font(.body)
                         .textSelection(.enabled)
                         .frame(maxWidth: .infinity, alignment: .leading)
@@ -23,6 +23,14 @@ struct MessageDetailView: View {
             Text("选择一条消息查看详情")
                 .foregroundStyle(.secondary)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
+        }
+    }
+
+    /// markdown 消息渲染样式，其余原样显示
+    private func bodyText(_ message: GotifyMessage) -> Text {
+        switch message.contentType {
+        case .markdown: Text(MarkdownRenderer.attributedBody(message.message))
+        case .plain: Text(message.message)
         }
     }
 

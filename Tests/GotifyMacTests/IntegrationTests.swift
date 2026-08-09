@@ -71,14 +71,19 @@ struct IntegrationTests {
         _ = try? await adminRequest("DELETE", "application/\(resources.appID)")
     }
 
-    func sendMessage(title: String, body: String, priority: Int, appToken: String) async throws {
+    func sendMessage(
+        title: String, body: String, priority: Int, appToken: String,
+        extras: [String: Any]? = nil
+    ) async throws {
         var request = URLRequest(url: Self.base.appendingPathComponent("message"))
         request.httpMethod = "POST"
         request.setValue(appToken, forHTTPHeaderField: "X-Gotify-Key")
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        request.httpBody = try JSONSerialization.data(withJSONObject: [
+        var payload: [String: Any] = [
             "title": title, "message": body, "priority": priority,
-        ] as [String: Any])
+        ]
+        if let extras { payload["extras"] = extras }
+        request.httpBody = try JSONSerialization.data(withJSONObject: payload)
         let (_, response) = try await URLSession.shared.data(for: request)
         guard (response as? HTTPURLResponse)?.statusCode == 200 else {
             throw IntegrationError("发送消息失败")
@@ -103,6 +108,31 @@ struct IntegrationTests {
 
             let apps = try await client.applications()
             #expect(apps.contains { $0.id == resources.appID })
+        } catch {
+            await destroy(resources)
+            throw error
+        }
+        await destroy(resources)
+    }
+
+    /// 业务项目推送 markdown 通知的真实链路：extras 声明 → 拉取后识别 → 摘要剥符号
+    @Test func markdown通知端到端识别与渲染() async throws {
+        let resources = try await createResources()
+        do {
+            let marker = "md-e2e-\(UUID().uuidString.prefix(8))"
+            let body = "**用户**: test@example.com\n- 金额: ¥199\n- 订单号: P2025"
+            try await sendMessage(
+                title: marker, body: body, priority: 5, appToken: resources.appToken,
+                extras: ["client::display": ["contentType": "text/markdown"]]
+            )
+
+            let client = GotifyClient(baseURL: Self.base, token: resources.clientToken)
+            let page = try await client.messages(limit: 20)
+            let found = try #require(page.messages.first { $0.title == marker })
+            #expect(found.contentType == .markdown)
+            #expect(found.previewText == "用户: test@example.com\n金额: ¥199\n订单号: P2025")
+            let rendered = String(MarkdownRenderer.attributedBody(found.message).characters)
+            #expect(rendered == "用户: test@example.com\n•  金额: ¥199\n•  订单号: P2025")
         } catch {
             await destroy(resources)
             throw error

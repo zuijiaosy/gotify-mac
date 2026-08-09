@@ -30,7 +30,7 @@ struct MessageRowView: View {
                     .fontWeight(.semibold)
                     .lineLimit(1)
                 if !compact {
-                    Text(message.message)
+                    Text(message.previewText)
                         .font(.caption)
                         .foregroundStyle(.secondary)
                         .lineLimit(2)
