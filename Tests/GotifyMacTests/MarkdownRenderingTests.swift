@@ -65,6 +65,11 @@ import Testing
         #expect(MarkdownRenderer.plainPreview("详情见[后台](https://a.com/x)") == "详情见后台")
     }
 
+    /// URL 里带括号（维基百科式链接）时不能在第一个右括号截断
+    @Test func 链接地址含括号不残留字符() {
+        #expect(MarkdownRenderer.plainPreview("见[文档](https://a.com/a_(b))") == "见文档")
+    }
+
     @Test func 行内代码剥反引号() {
         #expect(MarkdownRenderer.plainPreview("订单 `P2025` 已支付") == "订单 P2025 已支付")
     }
