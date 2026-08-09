@@ -9,5 +9,9 @@ struct GotifyMacApp: App {
             PanelView(model: model)
         }
         .menuBarExtraStyle(.window)
+
+        Settings {
+            SettingsView(model: model)
+        }
     }
 }

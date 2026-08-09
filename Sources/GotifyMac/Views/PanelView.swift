@@ -4,6 +4,7 @@ import SwiftUI
 /// （NSPanel resize 与 SwiftUI 动画不同步，会闪烁）。
 struct PanelView: View {
     let model: AppModel
+    @Environment(\.openSettings) private var openSettings
 
     // 基于 selectedMessage 而非 ID：选中的消息被仓库淘汰后自动收回单栏
     private var expanded: Bool { model.selectedMessage != nil }
@@ -44,6 +45,12 @@ struct PanelView: View {
                     .help(model.notifier.statusHint)
             }
             Menu {
+                Button("设置…") {
+                    // LSUIElement 应用无 Dock 图标，设置窗口不会自动前置，
+                    // 打开前必须先把应用激活到前台
+                    NSApp.activate(ignoringOtherApps: true)
+                    openSettings()
+                }
                 Button("重新检查连接") {
                     Task { await model.refresh() }
                 }

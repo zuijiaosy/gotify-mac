@@ -15,6 +15,8 @@ final class AppModel {
 
     private(set) var state: ConnectionState = .checking
     private(set) var serverURL = AppConfig.default.serverURL
+    /// 磁盘配置的内存镜像，设置界面读它；写只能走 saveConfig
+    private(set) var config = AppConfig.default
     private(set) var store = MessageStore()
     private(set) var apps: [Int: GotifyApplication] = [:]
     /// nil = 单栏列表；非 nil = 双栏并选中该消息
@@ -73,6 +75,7 @@ final class AppModel {
         retryTask = nil
         state = .checking
         let config = AppConfig.load()
+        self.config = config
         serverURL = config.serverURL
 
         let identity = "\(config.serverURL)|\(config.clientToken)"
@@ -111,7 +114,7 @@ final class AppModel {
                 if let priorBaseline {
                     for message in fresh.filter({ $0.id > priorBaseline })
                         .sorted(by: { $0.id < $1.id }) {
-                        notifier.post(message, appName: appName(for: message.appid))
+                        notifyIfEnabled(message)
                     }
                 }
                 // 加载成功即知道服务器此刻的消息上界（空历史时为 0），
@@ -138,6 +141,43 @@ final class AppModel {
             guard generation == refreshGeneration else { return }
             state = .failed("无法连接服务器，稍后自动重试")
             scheduleRetry(generation: generation)
+        }
+    }
+
+    /// 设置界面的唯一写入口：落盘立即生效；仅服务器地址或 Token 变化才重连
+    /// （开关类改动不能走 refresh，它会整体撕掉现有 WebSocket 流）。
+    func saveConfig(_ new: AppConfig) {
+        let reconnect = new.serverURL != config.serverURL
+            || new.clientToken != config.clientToken
+        config = new
+        try? AppConfig.save(new)
+        if reconnect { Task { await refresh() } }
+    }
+
+    enum ConnectionTest: Equatable {
+        case success(user: String)
+        case failure(String)
+    }
+
+    /// 用设置表单的草稿值测试连接，不触碰 self.client / self.state
+    func testConnection(
+        serverURL: String,
+        token: String,
+        fetcher: any HTTPDataFetching = URLSession.shared
+    ) async -> ConnectionTest {
+        guard !token.isEmpty else { return .failure("Token 为空") }
+        guard let base = URL(string: serverURL), base.scheme != nil else {
+            return .failure("服务器地址无效")
+        }
+        let client = GotifyClient(baseURL: base, token: token, fetcher: fetcher)
+        do {
+            return .success(user: try await client.currentUser().name)
+        } catch GotifyClientError.unauthorized {
+            return .failure("Token 无效（401）")
+        } catch GotifyClientError.http(let code) {
+            return .failure("连接失败：HTTP \(code)")
+        } catch {
+            return .failure("无法连接服务器")
         }
     }
 
@@ -217,7 +257,7 @@ final class AppModel {
                         // 基线已知（初始加载成功过，空历史时为 0）：
                         // id 大于基线的都是新消息，补发通知；与缓冲流事件互斥恰好一次
                         for message in fresh.filter({ $0.id > baseline }).sorted(by: { $0.id < $1.id }) {
-                            notifier.post(message, appName: appName(for: message.appid))
+                            notifyIfEnabled(message)
                         }
                     } else {
                         // 基线未知（初始加载失败）：补拉内容新旧莫辨，不直接通知；
@@ -234,7 +274,7 @@ final class AppModel {
                             await reloadApps(client: client, generation: generation)
                             guard generation == refreshGeneration else { return }
                         }
-                        notifier.post(message, appName: appName(for: message.appid))
+                        notifyIfEnabled(message)
                     }
                 case .disconnected(let reason):
                     state = .reconnecting(reason)
@@ -247,6 +287,16 @@ final class AppModel {
         guard let list = try? await client.applications(),
               generation == refreshGeneration else { return }
         apps = Dictionary(list.map { ($0.id, $0) }, uniquingKeysWith: { _, new in new })
+    }
+
+    /// 所有新消息通知的统一出口：用户级开关与声音偏好在此生效
+    private func notifyIfEnabled(_ message: GotifyMessage) {
+        guard config.notificationsEnabled else { return }
+        notifier.post(
+            message,
+            appName: appName(for: message.appid),
+            sound: config.soundEnabled
+        )
     }
 
     func appName(for appid: Int) -> String {

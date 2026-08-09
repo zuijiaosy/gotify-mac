@@ -30,12 +30,12 @@ final class NotificationService: NSObject, UNUserNotificationCenterDelegate {
     }
 
     /// 调用方保证只对真正新增的消息调用（MessageStore.insert 返回 true）
-    func post(_ message: GotifyMessage, appName: String) {
+    func post(_ message: GotifyMessage, appName: String, sound: Bool = true) {
         guard available else { return }
         let content = UNMutableNotificationContent()
         content.title = "\(appName): \(message.displayTitle)"
         content.body = message.message
-        content.sound = .default
+        content.sound = sound ? .default : nil
         let request = UNNotificationRequest(
             identifier: "gotify-message-\(message.id)",  // 同 id 不重复通知的兜底
             content: content,

@@ -157,3 +157,17 @@ Gotify Client Token 必须存储在 macOS Keychain，不写入源码、普通偏
 - Token 以明文形式存在磁盘上，安全性弱于 Keychain；日志和错误信息仍必须屏蔽 Token。
 - 若将来面向分发或多用户场景，应新增 ADR 重新评估凭据存储方案。
 
+
+## ADR-009：应用内配置写入策略
+
+- Status: Accepted
+- Date: 2026-08-09
+
+### Decision
+
+设置窗口落地后，config.json 由应用写入（此前仅手工编辑）。写入策略：JSON 保持 prettyPrinted + sortedKeys（保留手工编辑的可行性）；原子写（临时文件 rename）后必须重设权限 600（rename 会丢原权限位）；解码采用逐字段容错——老版本文件缺新字段时回默认值，绝不整体解码失败回落 default（否则已配置的 serverURL/token 会"丢失"）。应用内写入唯一入口为 `AppModel.saveConfig`，仅服务器地址或 Token 变化才触发重连。
+
+### Consequences
+
+- 未来给 AppConfig 加字段必须提供默认值并走 decodeIfPresent，保证旧文件兼容。
+- 手工编辑 config.json 仍然有效，但应用一旦保存设置会重写整个文件（未知字段会被丢弃）。

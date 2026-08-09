@@ -1,21 +1,21 @@
 # Architecture
 
-Updated: 2026-08-08
+Updated: 2026-08-09
 
 ## 当前实现
 
 MVP 已实现（详见 ADR-006/007/008）：
 
-- **Configuration**：`AppConfig.swift` 从 `~/Library/Application Support/GotifyMac/config.json` 读取服务器地址与 Client Token（ADR-008）。
+- **Configuration**：`AppConfig.swift` 读写 `~/Library/Application Support/GotifyMac/config.json`（ADR-008/009）：服务器地址、Client Token、通知偏好；缺字段容错解码、原子写后重设权限 600；load/save 路径可注入以便测试。写入唯一入口是 `AppModel.saveConfig`，View 不直接落盘。
 - **Networking**：`GotifyClient.swift`（REST：current/user、application、message 分页与补拉，`HTTPDataFetching` 协议注入可测）；`GotifyStream.swift`（WebSocket /stream，AsyncStream 封装，ping 确认握手，指数退避重连 1s→60s ±20% 抖动，取消即断开）。
 - **Message Store**：`MessageStore.swift`，纯逻辑 struct，按 id 去重/降序/保留最近 200 条（不落盘，符合 ADR-002），`merge` 返回真正新增项供通知判断。
 - **Notification Service**：`NotificationService.swift`，UNUserNotificationCenter 封装；非 .app 环境（swift run/测试进程）自动降级不触碰 UN API；`willPresent` 保证前台横幅；仅对 `insert` 成功的新消息通知。
 - **协调者**：`AppModel.swift`（@MainActor @Observable），连接状态机（checking/unconfigured/connected/reconnecting/failed）、初始 REST 加载、流生命周期、重连后 `messagesNewer` 补拉、面板选中态。
-- **UI**：`Views/PanelView.swift`（MenuBarExtra `.window` 样式，单栏 360 ↔ 双栏 240+400 两档定宽硬切）、`MessageRowView.swift`（优先级色点 ≥8 红/4-7 橙/1-3 蓝/0 灰）、`MessageDetailView.swift`（详情/复制/返回）。
+- **UI**：`Views/PanelView.swift`（MenuBarExtra `.window` 样式，单栏 360 ↔ 双栏 240+400 两档定宽硬切）、`MessageRowView.swift`（优先级色点 ≥8 红/4-7 橙/1-3 蓝/0 灰）、`MessageDetailView.swift`（详情/复制/返回）、`Views/Settings/`（Settings scene + TabView 顶部标签式设置窗口：服务器标签草稿+显式提交+测试连接，通知标签开关即时生效；LSUIElement 下打开设置前手动 activate 前置窗口）。
 - **测试**：`Tests/GotifyMacTests/` 单元测试 + `GOTIFY_E2E=1` 门控集成测试（打真实 docker 服务端）；`scripts/test.sh` 包装 CLT 环境所需的 Testing.framework 路径；`scripts/e2e-ui-check.sh` 半自动 UI 截图验证。
 - 打包 `scripts/build-app.sh` / 一键启动 `start.sh`；本地服务端 `deploy/gotify/docker-compose.yml`（2.7.3，端口 18080）。
 
-尚未实现：应用内配置编辑界面（只能手工编辑 config.json）、系统睡眠/唤醒专门处理（当前依赖重连退避兜底）、登录自启动、已读状态。
+尚未实现：系统睡眠/唤醒专门处理（当前依赖重连退避兜底）、登录自启动、已读状态。
 
 本文件以下内容是第一版的**目标架构基线**，用于约束后续实现；代码落地后，必须根据真实实现更新，并将已经实现与尚未实现的部分分开描述。
 
