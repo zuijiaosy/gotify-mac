@@ -85,6 +85,43 @@ import Testing
         #expect(MarkdownRenderer.plainPreview(raw) == "加粗 与 斜体 与 代码 与 链接")
     }
 
+    // MARK: - 围栏代码块
+
+    static let fenced = """
+    执行以下命令:
+    ```
+    - rm file
+    # 注释
+    **不是加粗**
+    ```
+    完成
+    """
+
+    @Test func 围栏内不转换块级标记() {
+        let rendered = String(MarkdownRenderer.attributedBody(Self.fenced).characters)
+        #expect(rendered.contains("- rm file"))
+        #expect(rendered.contains("# 注释"))
+        #expect(!rendered.contains("•  rm file"))
+    }
+
+    @Test func 围栏内不解析行内语法() {
+        let rendered = String(MarkdownRenderer.attributedBody(Self.fenced).characters)
+        #expect(rendered.contains("**不是加粗**"))
+    }
+
+    @Test func 围栏内摘要不剥标记() {
+        let preview = MarkdownRenderer.plainPreview(Self.fenced)
+        #expect(preview.contains("- rm file"))
+        #expect(preview.contains("**不是加粗**"))
+    }
+
+    @Test func 围栏结束后恢复正常渲染() {
+        let preview = MarkdownRenderer.plainPreview("```\n- 原样\n```\n- 列表项")
+        #expect(preview.contains("- 原样"))
+        #expect(preview.hasSuffix("列表项"))
+        #expect(!preview.hasSuffix("- 列表项"))
+    }
+
     // MARK: - previewText 门控
 
     @Test func 纯文本消息previewText与原文完全一致() {

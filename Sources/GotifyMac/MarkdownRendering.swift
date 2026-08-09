@@ -14,18 +14,38 @@ enum MarkdownRenderer {
     /// 详情页正文：渲染为带样式的 AttributedString
     static func attributedBody(_ text: String) -> AttributedString {
         var result = AttributedString()
+        var inFence = false
         for (index, line) in text.components(separatedBy: "\n").enumerated() {
             if index > 0 { result.append(AttributedString("\n")) }
-            result.append(attributedLine(line))
+            if isFenceDelimiter(line) {
+                inFence.toggle()
+                result.append(AttributedString(line))
+                continue
+            }
+            result.append(inFence ? AttributedString(line) : attributedLine(line))
         }
         return result
     }
 
     /// 列表预览与系统通知横幅：剥掉标记的纯文本（这两处无法渲染样式）
     static func plainPreview(_ text: String) -> String {
-        text.components(separatedBy: "\n")
-            .map(strippedLine)
+        var inFence = false
+        return text.components(separatedBy: "\n")
+            .map { line in
+                if isFenceDelimiter(line) {
+                    inFence.toggle()
+                    return line
+                }
+                return inFence ? line : strippedLine(line)
+            }
             .joined(separator: "\n")
+    }
+
+    /// 围栏代码块内一律按字面量处理：块级标记不转换、行内语法不解析，
+    /// 否则代码里的 `- ` `# ` 会被当成列表和标题，源码字符被吃掉。
+    private static func isFenceDelimiter(_ line: String) -> Bool {
+        let trimmed = line.trimmingCharacters(in: .whitespaces)
+        return trimmed.hasPrefix("```") || trimmed.hasPrefix("~~~")
     }
 
     // MARK: - 渲染
