@@ -84,9 +84,16 @@ import Testing
         #expect(MarkdownRenderer.plainPreview("订单 `P2025` 已支付") == "订单 P2025 已支付")
     }
 
-    @Test(arguments: ["user_id: 42", "a*b*c 与 2*3", "snake_case_name", "3 * 4 = 12"])
+    @Test(arguments: ["user_id: 42", "snake_case_name", "3 * 4 = 12", "2*3 = 6"])
     func 不误伤裸下划线与星号(input: String) {
         #expect(MarkdownRenderer.plainPreview(input) == input)
+    }
+
+    /// 摘要与详情共用解析器，CommonMark 允许 `*` 的词内强调，两边结果必须一致
+    @Test(arguments: ["a*b*c", "**加粗**", "`**代码内不加粗**`", #"\*转义\*"#])
+    func 摘要与详情文本始终一致(input: String) {
+        let detail = String(MarkdownRenderer.attributedBody(input).characters)
+        #expect(MarkdownRenderer.plainPreview(input) == detail)
     }
 
     @Test(arguments: [("*斜体*", "斜体"), ("_斜体_", "斜体"), ("金额 *偏低* 请注意", "金额 偏低 请注意")])

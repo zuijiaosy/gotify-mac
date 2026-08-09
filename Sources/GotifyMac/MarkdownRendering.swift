@@ -11,6 +11,9 @@ import Foundation
 /// 支持：加粗、斜体、行内代码、链接、无序列表、ATX 标题。
 /// 不支持（按字面量显示）：表格、围栏代码块、嵌套列表、图片、HTML。
 enum MarkdownRenderer {
+    /// 列表项在详情页显示为圆点；摘要里再去掉
+    private static let bulletPrefix = "•  "
+
     /// 详情页正文：渲染为带样式的 AttributedString
     static func attributedBody(_ text: String) -> AttributedString {
         var result = AttributedString()
@@ -27,18 +30,24 @@ enum MarkdownRenderer {
         return result
     }
 
-    /// 列表预览与系统通知横幅：剥掉标记的纯文本（这两处无法渲染样式）
+    /// 列表预览与系统通知横幅：剥掉标记的纯文本（这两处无法渲染样式）。
+    ///
+    /// 直接取详情渲染结果的字符，与详情页共用同一条解析路径。此前摘要另走一套正则，
+    /// 结果两边对行内代码里的标记、转义符、intraword 强调等理解不一致——
+    /// 详情渲染了而摘要残留标记。共用解析器后这类分歧不可能再出现。
     static func plainPreview(_ text: String) -> String {
-        var inFence = false
-        return text.components(separatedBy: "\n")
-            .map { line in
-                if isFenceDelimiter(line) {
-                    inFence.toggle()
-                    return line
-                }
-                return inFence ? line : strippedLine(line)
-            }
+        String(attributedBody(text).characters)
+            .components(separatedBy: "\n")
+            .map(strippedBullet)
             .joined(separator: "\n")
+    }
+
+    /// 圆点是给详情页看的视觉标记，纯文本摘要里不需要
+    private static func strippedBullet(_ line: String) -> String {
+        let indent = line.prefix { $0 == " " || $0 == "\t" }
+        let body = line.dropFirst(indent.count)
+        guard body.hasPrefix(bulletPrefix) else { return line }
+        return String(indent) + String(body.dropFirst(bulletPrefix.count))
     }
 
     /// 围栏代码块内一律按字面量处理：块级标记不转换、行内语法不解析，
@@ -75,7 +84,7 @@ enum MarkdownRenderer {
 
         // 无序列表：- / * / + 后跟空格
         if let marker = body.first, "-*+".contains(marker), body.dropFirst().first == " " {
-            return (indent + "•  " + body.dropFirst(2), false)
+            return (indent + bulletPrefix + body.dropFirst(2), false)
         }
 
         return (line, false)
@@ -99,50 +108,6 @@ enum MarkdownRenderer {
         )
         // 未闭合标记等异常输入回退为原始文本，不能丢内容
         return (try? AttributedString(markdown: text, options: options)) ?? AttributedString(text)
-    }
-
-    // MARK: - 剥符号
-
-    /// 只匹配成对标记，不做裸 * / _ 的全局删除，避免误伤 snake_case、乘号等。
-    /// 单标记斜体额外要求标记外侧不是字母数字（近似 CommonMark 的 flanking 规则），
-    /// 这样 `user_id`、`2*3` 不会被误剥，而 `*斜体*` 能正常还原。
-    /// 顺序有意义：先剥双标记，剩下的成对单标记才是斜体。
-    private static let inlinePatterns: [(pattern: String, template: String)] = [
-        // 链接只留文字；URL 允许一层嵌套括号，否则 [x](host/a_(b)) 会在第一个右括号截断
-        (#"\[([^\]]+)\]\((?:[^()]|\([^()]*\))*\)"#, "$1"),
-        (#"\*\*(.+?)\*\*"#, "$1"),
-        (#"__(.+?)__"#, "$1"),
-        (#"(?<![*\w])\*([^*\s][^*]*?)\*(?![*\w])"#, "$1"),
-        (#"(?<![_\w])_([^_\s][^_]*?)_(?![_\w])"#, "$1"),
-        (#"`(.+?)`"#, "$1"),
-    ]
-
-    /// 预编译，避免每行渲染都重建正则
-    private static let inlineRegexes: [(NSRegularExpression, String)] =
-        inlinePatterns.compactMap { spec in
-            guard let regex = try? NSRegularExpression(pattern: spec.pattern) else { return nil }
-            return (regex, spec.template)
-        }
-
-    private static func strippedLine(_ line: String) -> String {
-        let indent = line.prefix { $0 == " " || $0 == "\t" }
-        var body = String(line.dropFirst(indent.count))
-
-        let hashes = body.prefix { $0 == "#" }
-        if (1...6).contains(hashes.count), body.dropFirst(hashes.count).first == " " {
-            body = stripAtxClosing(body.dropFirst(hashes.count).trimmingCharacters(in: .whitespaces))
-        } else if let marker = body.first, "-*+".contains(marker), body.dropFirst().first == " " {
-            body = String(body.dropFirst(2))
-        }
-
-        for (regex, template) in inlineRegexes {
-            body = regex.stringByReplacingMatches(
-                in: body,
-                range: NSRange(body.startIndex..., in: body),
-                withTemplate: template
-            )
-        }
-        return indent + body
     }
 }
 
