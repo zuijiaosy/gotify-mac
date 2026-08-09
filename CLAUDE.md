@@ -14,6 +14,7 @@ Gotify Mac 是一个面向 macOS 的 Gotify 原生客户端（Swift + SwiftUI �
 ./start.sh                   # 一键：退出旧实例 → 构建 release → 启动 .app
 swift build                  # 仅构建（debug）
 scripts/build-app.sh         # 构建 release 并组装 build/Gotify Mac.app（ad-hoc 签名）
+scripts/make-dmg.sh          # 把已组装的 .app 打成 build/Gotify-Mac-<版本>.dmg
 open "build/Gotify Mac.app"  # 运行菜单栏应用
 
 # 本地 Gotify 服务端（Docker，http://127.0.0.1:18080，管理界面账号 admin/admin）
@@ -49,7 +50,8 @@ scripts/e2e-ui-check.sh        # 半自动端到端 UI 验证（需终端有辅�
 - `Sources/GotifyMac/` — `GotifyMacApp.swift`（`MenuBarExtra` .window 入口）、`AppConfig.swift`（config.json 读取）、`AppModel.swift`（协调者：连接状态机/流生命周期/选中态）、`GotifyClient.swift`（REST）、`GotifyStream.swift`（WebSocket + 重连退避）、`MessageStore.swift`（去重/降序/200 条上限）、`NotificationService.swift`（系统通知）、`Views/`（PanelView/MessageRowView/MessageDetailView）。
 - `Tests/GotifyMacTests/` — Swift Testing 单元测试 + `GOTIFY_E2E=1` 门控的集成测试。
 - `Support/Info.plist` — bundle 配置（`LSUIElement=true` 隐藏 Dock 图标）。
-- `scripts/` — `build-app.sh`（组装 .app）、`test.sh`（测试包装）、`e2e-ui-check.sh`（半自动 UI 验证）。
+- `scripts/` — `build-app.sh`（组装 .app，`APP_VERSION`/`APP_BUILD`/`APP_ARCHS` 可覆盖版本与架构）、`make-dmg.sh`（打 DMG）、`test.sh`（测试包装）、`e2e-ui-check.sh`（半自动 UI 验证）。
+- `.github/workflows/release.yml` — 推 `v*` 标签触发：测试 → 通用二进制 → DMG → GitHub Release（ADR-013）。
 - `deploy/gotify/` — 本地 Gotify 服务端 docker-compose；`data/` 子目录含数据库（内含 Token），已 gitignore，不得提交。
 
 ## 模块边界（已实现，改动时保持）

@@ -24,6 +24,8 @@ Updated: 2026-08-09
 
 - Codex 多轮对抗审查 6 轮共 17 条发现，全部核实为真并修复（含连接恢复、通知恰好一次语义、并发竞态、测试隔离等）。
 
+- **发布流程（2026-08-09，ADR-013）**：`scripts/make-dmg.sh` 把 `.app` 打成含 `/Applications` 快捷方式的 DMG；`build-app.sh` 新增 `APP_VERSION`/`APP_BUILD`/`APP_ARCHS` 环境变量；`.github/workflows/release.yml` 在推 `v*` 标签时跑测试 → 出 arm64+x86_64 通用二进制 → 打 DMG → `gh release create` 上传到 Releases。签名仍为 ad-hoc、不公证，用户首次打开需手动放行。
+
 - **全部已读（2026-08-09，ADR-011）**：面板右上角 `checkmark.circle` 按钮把已读水位线 `lastReadMessageID` 推到当前最大消息 id 并落盘 config.json；未读消息标题前显示 accent 色小蓝点，菜单栏铃铛在有未读时变为 `bell.badge`；换服务器身份时水位线归零。测试 67 个用例全绿（新增水位线读写往返与旧配置兼容 2 个）。
 - **Markdown 正文渲染（2026-08-09，ADR-010）**：解析 `extras.client::display.contentType`，详情页渲染加粗/斜体/行内代码/链接/无序列表/ATX 标题，列表行与通知横幅显示剥标记后的纯文本；畸形 extras 降级为纯文本且不影响整条消息解码。测试 58 个用例全绿（新增 21 个，含畸形 extras 参数化与 markdown 端到端）。动因：codexzh / cczh / auto-gpt-plus 三个项目把管理员通知从邮件迁到 Gotify，正文改用 Markdown。
 
@@ -37,7 +39,7 @@ Updated: 2026-08-09
 
 - 系统睡眠/唤醒专门处理（当前靠重连退避兜底）、网络切换主动探测。
 - 登录时启动、消息删除、逐条已读（当前只有全部已读水位线，ADR-011）。
-- CI 与发布流程。
+- PR/push 的持续集成（当前只有打标签触发的发布 workflow）、应用内自动更新、公证。
 
 ## Known Issues
 
@@ -45,8 +47,10 @@ Updated: 2026-08-09
 - Token 明文存 config.json（权限 600，ADR-008 已知取舍）。
 - macOS 26 实测系统通知授权对 ad-hoc / 自签名 / Apple Development 证书均难以稳定通过（拒绝记录绑定应用路径且无法在系统设置中重置），已决策放弃系统通知横幅并移除其 UI 入口（工具栏警示图标、设置「通知」标签），以菜单栏未读圆点为唯一提醒（ADR-012）。
 - 面板宽度两档硬切无动画（NSPanel resize 与 SwiftUI 动画不同步，属有意取舍）。
+- 通用二进制构建（`APP_ARCHS="arm64 x86_64"`）走 xcbuild，本机纯 CLT 环境不可用，只能在 CI 上验证；首次发版需确认 workflow 里 `lipo -info` 输出两个架构。
 
 ## Next
 
 1. 用户授权终端权限后跑 `scripts/e2e-ui-check.sh` 完成 UI 截图验收；按上面清单手工验收设置窗口。
-2. 后续迭代：设置窗口「通用」标签（开机自启，SMAppService，需实测 ad-hoc 签名下行为）、睡眠/唤醒处理。
+2. 首次发版：推 `v0.2.0` 标签跑通 release workflow，确认 DMG 可下载、通用二进制两个架构、Gatekeeper 放行说明可用。
+3. 后续迭代：设置窗口「通用」标签（开机自启，SMAppService，需实测 ad-hoc 签名下行为）、睡眠/唤醒处理。

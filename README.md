@@ -30,7 +30,20 @@
 
 ## 安装与运行
 
-目前从源码构建（无需 Xcode.app，Command Line Tools + Swift 6 工具链即可）：
+### 下载安装包（推荐）
+
+从 [Releases](https://github.com/zuijiaosy/gotify-mac/releases) 下载最新的 `Gotify-Mac-*.dmg`，打开后把 **Gotify Mac** 拖进「应用程序」。
+
+安装包是 ad-hoc 签名、未经 Apple 公证的（公证需要付费开发者账号，见 ADR-013），首次打开会被 Gatekeeper 拦截，任选一种方式放行：
+
+- 在「应用程序」里右键点图标 → **打开** → 弹窗里再点「打开」；
+- 或执行 `xattr -dr com.apple.quarantine "/Applications/Gotify Mac.app"`。
+
+应用没有 Dock 图标，启动后在菜单栏出现铃铛图标。
+
+### 从源码构建
+
+无需 Xcode.app，Command Line Tools + Swift 6 工具链即可：
 
 ```bash
 git clone https://github.com/zuijiaosy/gotify-mac.git
@@ -67,10 +80,21 @@ docker compose -f deploy/gotify/docker-compose.yml up -d
 ```bash
 swift build                    # 仅构建（debug）
 scripts/build-app.sh           # 构建 release 并组装 .app
+scripts/make-dmg.sh            # 把已组装的 .app 打成 build/Gotify-Mac-<版本>.dmg
 scripts/test.sh                # 单元测试（CLT 环境必须用此脚本，不要直接 swift test）
 GOTIFY_E2E=1 scripts/test.sh   # 含打真实本地服务端的集成测试
 scripts/e2e-ui-check.sh        # 半自动端到端 UI 验证（需终端有辅助功能+屏幕录制权限）
 ```
+
+### 发布
+
+推送 `v` 开头的标签即触发 `.github/workflows/release.yml`：跑测试 → 构建通用二进制（arm64 + x86_64）→ 打 DMG → 创建 GitHub Release 并上传。版本号取自标签。
+
+```bash
+git tag v0.2.0 && git push origin v0.2.0
+```
+
+workflow 也支持在 Actions 页手动触发，只产出构建物、不创建 Release，可用来试跑。
 
 ### 项目文档
 
@@ -91,7 +115,7 @@ scripts/e2e-ui-check.sh        # 半自动端到端 UI 验证（需终端有辅�
 
 - 未做跨设备已读同步与消息删除（第一版明确不做，见 ADR）。
 - 无系统通知横幅：新版 macOS（实测 macOS 26）对 ad-hoc 签名应用拒绝通知授权，已决策移除该功能入口，新消息以菜单栏未读角标与列表圆点提示（详见 `docs/DECISIONS.md` ADR-012）。
-- 暂无预编译安装包与自动更新，需从源码构建。
+- 安装包未经 Apple 公证，首次打开需手动放行；也没有自动更新，新版本需回 Releases 页下载。
 
 ## 许可证
 

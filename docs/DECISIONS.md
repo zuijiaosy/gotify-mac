@@ -237,3 +237,28 @@ macOS 26 上完整排查结论：
 - 无需 Xcode、无需任何证书，回到纯 CLT + SwiftPM 工作流（ADR-007 完整保持）。
 - 若将来 macOS 放宽限制或用户改用有效证书，功能无需改代码即可恢复。
 - 排查过程中生成的钥匙串项（Apple Development 证书、WWDR G3 中间证书）无害保留。
+
+## ADR-013：发布走 GitHub Actions 打 DMG，ad-hoc 签名不公证
+
+- Status: Accepted
+- Date: 2026-08-09
+
+### Decision
+
+推送 `v*` 标签触发 `.github/workflows/release.yml`：在 macos-15 runner 上跑单元测试 → `scripts/build-app.sh`（`APP_ARCHS="arm64 x86_64"` 出通用二进制，`APP_VERSION` 取自标签、`APP_BUILD` 取 run number）→ `scripts/make-dmg.sh` 打成含 `/Applications` 快捷方式的 DMG → `gh release create` 上传到 Releases。签名仍是 ad-hoc，不做 Developer ID 签名与公证。
+
+DMG 打包逻辑放在 `scripts/make-dmg.sh` 而不是写进 workflow，本地可复现同样的产物；CI 只做编排。
+
+### Rationale
+
+- 用户需要在 Releases 页直接下载安装包，源码构建对普通用户门槛过高。
+- 公证需要 99 美元/年的 Apple Developer Program 会员，对个人自用工具不成立；ad-hoc 签名的取舍已在 ADR-012 定过，这里延续。
+- runner 是 Apple Silicon，默认只出 arm64；显式双架构才能覆盖 Intel Mac。多架构构建走 xcbuild 需要完整 Xcode，CI 有、本机（纯 CLT，ADR-007）没有，因此架构做成可选环境变量而不是写死。
+- 用 `gh` CLI 而不是第三方 action 发布，减少供应链面。
+
+### Consequences
+
+- 用户下载的 DMG 会被 Gatekeeper 拦截，必须右键「打开」或 `xattr -dr com.apple.quarantine`；Release 说明与 README 都写明该步骤。
+- 版本号唯一来源是 git 标签，`Support/Info.plist` 里的 `0.1.0` 只作为本地构建的缺省值。
+- 本机无法验证通用二进制构建（缺 Xcode），该路径只在 CI 上生效，首次发版需确认 `lipo -info` 输出两个架构（workflow 内已加该检查步骤）。
+- 没有自动更新机制，用户需自行回到 Releases 页下载新版本。
