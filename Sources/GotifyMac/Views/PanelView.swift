@@ -39,11 +39,14 @@ struct PanelView: View {
                 .font(.caption)
                 .foregroundStyle(.secondary)
                 .lineLimit(1)
-            if !model.notifier.statusHint.isEmpty {
-                Image(systemName: "bell.slash")
-                    .foregroundStyle(.orange)
-                    .help(model.notifier.statusHint)
+            Button {
+                model.markAllRead()
+            } label: {
+                Image(systemName: "checkmark.circle")
             }
+            .buttonStyle(.borderless)
+            .disabled(!model.hasUnread)
+            .help("全部标为已读")
             Menu {
                 Button("设置…") {
                     // LSUIElement 应用无 Dock 图标，设置窗口不会自动前置，
@@ -88,6 +91,7 @@ struct PanelView: View {
                             message: message,
                             appName: model.appName(for: message.appid),
                             isSelected: model.selectedMessageID == message.id,
+                            isUnread: model.isUnread(message),
                             compact: expanded
                         )
                         .onTapGesture {

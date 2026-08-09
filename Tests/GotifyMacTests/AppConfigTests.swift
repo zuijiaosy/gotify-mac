@@ -78,6 +78,25 @@ import Testing
         #expect(loaded.soundEnabled == true)
     }
 
+    @Test func 已读水位线保存后读回相同值() throws {
+        let url = makeTempURL()
+        defer { cleanUp(url) }
+        var config = AppConfig.default
+        config.lastReadMessageID = 42
+        try AppConfig.save(config, to: url)
+        #expect(AppConfig.load(from: url).lastReadMessageID == 42)
+    }
+
+    @Test func 老版本配置缺已读水位线时回落为0() throws {
+        let url = makeTempURL()
+        defer { cleanUp(url) }
+        try FileManager.default.createDirectory(
+            at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+        let legacy = #"{"serverURL":"http://legacy.test:9999","clientToken":"tok-legacy"}"#
+        try Data(legacy.utf8).write(to: url)
+        #expect(AppConfig.load(from: url).lastReadMessageID == 0)
+    }
+
     @Test func 配置文件损坏时load回落默认() throws {
         let url = makeTempURL()
         defer { cleanUp(url) }

@@ -5,6 +5,7 @@ struct MessageRowView: View {
     let message: GotifyMessage
     let appName: String
     let isSelected: Bool
+    let isUnread: Bool
     /// 双栏模式下列表变窄，隐藏摘要
     let compact: Bool
 
@@ -25,10 +26,17 @@ struct MessageRowView: View {
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
-                Text(message.displayTitle)
-                    .font(.callout)
-                    .fontWeight(.semibold)
-                    .lineLimit(1)
+                HStack(spacing: 4) {
+                    if isUnread {
+                        Circle()
+                            .fill(Color.accentColor)
+                            .frame(width: 6, height: 6)
+                    }
+                    Text(message.displayTitle)
+                        .font(.callout)
+                        .fontWeight(.semibold)
+                        .lineLimit(1)
+                }
                 if !compact {
                     Text(message.previewText)
                         .font(.caption)

@@ -7,6 +7,8 @@ struct AppConfig: Codable {
     var clientToken: String
     var notificationsEnabled: Bool
     var soundEnabled: Bool
+    /// 已读水位线：id 大于它的消息视为未读；0 = 从未标记过已读（ADR-011）
+    var lastReadMessageID: Int
 
     static let fileURL: URL = FileManager.default
         .urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
@@ -18,12 +20,14 @@ struct AppConfig: Codable {
         serverURL: String,
         clientToken: String,
         notificationsEnabled: Bool = true,
-        soundEnabled: Bool = true
+        soundEnabled: Bool = true,
+        lastReadMessageID: Int = 0
     ) {
         self.serverURL = serverURL
         self.clientToken = clientToken
         self.notificationsEnabled = notificationsEnabled
         self.soundEnabled = soundEnabled
+        self.lastReadMessageID = lastReadMessageID
     }
 
     /// 老版本 config.json 缺新字段时逐字段回默认，绝不能整体解码失败
@@ -35,6 +39,7 @@ struct AppConfig: Codable {
         clientToken = try c.decodeIfPresent(String.self, forKey: .clientToken) ?? ""
         notificationsEnabled = try c.decodeIfPresent(Bool.self, forKey: .notificationsEnabled) ?? true
         soundEnabled = try c.decodeIfPresent(Bool.self, forKey: .soundEnabled) ?? true
+        lastReadMessageID = try c.decodeIfPresent(Int.self, forKey: .lastReadMessageID) ?? 0
     }
 
     static func load(from url: URL = fileURL) -> AppConfig {

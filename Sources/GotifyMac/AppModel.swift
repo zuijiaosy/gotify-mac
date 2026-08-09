@@ -55,6 +55,19 @@ final class AppModel {
         return store.messages.first { $0.id == id }
     }
 
+    var hasUnread: Bool { store.maxKnownID > config.lastReadMessageID }
+
+    func isUnread(_ message: GotifyMessage) -> Bool {
+        message.id > config.lastReadMessageID
+    }
+
+    /// 把水位线推到当前最大消息 id：之后到达的消息才算未读
+    func markAllRead() {
+        var new = config
+        new.lastReadMessageID = store.maxKnownID
+        saveConfig(new)
+    }
+
     /// autoStart: false 供测试使用，避免测试进程读取真实配置、访问真实服务器
     init(autoStart: Bool = true) {
         if autoStart {
@@ -85,6 +98,12 @@ final class AppModel {
             selectedMessageID = nil
             pendingStreamNotifyIDs = []
             notifyBaseline = nil
+            // 旧服务器的已读水位线对新服务器无意义，归零并落盘；
+            // 首次启动 lastIdentity 为 nil 也走本分支，须跳过否则每次启动都清掉持久化的水位线
+            if lastIdentity != nil, config.lastReadMessageID != 0 {
+                self.config.lastReadMessageID = 0
+                try? AppConfig.save(self.config)
+            }
             lastIdentity = identity
         }
 
