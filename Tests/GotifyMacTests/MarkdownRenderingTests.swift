@@ -39,6 +39,16 @@ import Testing
         #expect(rendered.runs.allSatisfy { $0.inlinePresentationIntent == .stronglyEmphasized })
     }
 
+    @Test(arguments: [
+        ("## 库存预警 ##", "库存预警"),
+        ("# 标题 #", "标题"),
+        ("## 语言 C#", "语言 C#"),  // 闭合井号前需有空格，不误伤 C#
+    ])
+    func ATX闭合井号一并剥除(input: String, expected: String) {
+        #expect(String(MarkdownRenderer.attributedBody(input).characters) == expected)
+        #expect(MarkdownRenderer.plainPreview(input) == expected)
+    }
+
     @Test func 未闭合标记回退原文不崩溃() {
         let rendered = MarkdownRenderer.attributedBody("金额 ** 未闭合")
         #expect(String(rendered.characters).contains("未闭合"))

@@ -69,7 +69,7 @@ enum MarkdownRenderer {
         if (1...6).contains(hashes.count) {
             let rest = body.dropFirst(hashes.count)
             if rest.first == " " {
-                return (indent + rest.trimmingCharacters(in: .whitespaces), true)
+                return (indent + stripAtxClosing(rest.trimmingCharacters(in: .whitespaces)), true)
             }
         }
 
@@ -79,6 +79,17 @@ enum MarkdownRenderer {
         }
 
         return (line, false)
+    }
+
+    /// ATX 标题的闭合井号是可选语法（`## 标题 ##`），需与开头井号一并去掉，
+    /// 否则详情、列表和横幅都会残留结尾的 `##`
+    private static func stripAtxClosing(_ text: String) -> String {
+        let trailing = text.reversed().prefix { $0 == "#" }
+        guard !trailing.isEmpty else { return text }
+        let head = text.dropLast(trailing.count)
+        // 闭合井号前必须有空格，避免把 "C#" 这类内容误伤
+        guard head.last == " " else { return text }
+        return String(head).trimmingCharacters(in: .whitespaces)
     }
 
     private static func inlineParsed(_ text: String) -> AttributedString {
@@ -119,7 +130,7 @@ enum MarkdownRenderer {
 
         let hashes = body.prefix { $0 == "#" }
         if (1...6).contains(hashes.count), body.dropFirst(hashes.count).first == " " {
-            body = body.dropFirst(hashes.count).trimmingCharacters(in: .whitespaces)
+            body = stripAtxClosing(body.dropFirst(hashes.count).trimmingCharacters(in: .whitespaces))
         } else if let marker = body.first, "-*+".contains(marker), body.dropFirst().first == " " {
             body = String(body.dropFirst(2))
         }
