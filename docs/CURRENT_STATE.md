@@ -1,6 +1,6 @@
 # Current State
 
-Updated: 2026-08-09
+Updated: 2026-08-10
 
 ## Completed
 
@@ -28,6 +28,8 @@ Updated: 2026-08-09
 
 - **全部已读（2026-08-09，ADR-011）**：面板右上角 `checkmark.circle` 按钮把已读水位线 `lastReadMessageID` 推到当前最大消息 id 并落盘 config.json；未读消息标题前显示 accent 色小蓝点，菜单栏铃铛在有未读时变为 `bell.badge`；换服务器身份时水位线归零。测试 67 个用例全绿（新增水位线读写往返与旧配置兼容 2 个）。
 - **Markdown 正文渲染（2026-08-09，ADR-010）**：解析 `extras.client::display.contentType`，详情页渲染加粗/斜体/行内代码/链接/无序列表/ATX 标题，列表行与通知横幅显示剥标记后的纯文本；畸形 extras 降级为纯文本且不影响整条消息解码。测试 58 个用例全绿（新增 21 个，含畸形 extras 参数化与 markdown 端到端）。动因：codexzh / cczh / auto-gpt-plus 三个项目把管理员通知从邮件迁到 Gotify，正文改用 Markdown。
+
+- **面板"鬼影"窗口修复（2026-08-10）**：用户实测出现窗口停在 641pt（双栏宽）而内容 360pt 居中、四周露出一圈空白鬼影的状态（截图几何比例 1.78 与 641/360 精确吻合）。程序化探针验证了 6 条状态切换路径（离屏/可见/竞态的展开与收窄、关闭重开）窗口 resize 均正常，未能复现精确触发点——嫌疑最大的是"展开详情后点击面板外部关闭"这条需要真实鼠标事件的路径（本机 agent shell 无辅助功能权限，无法模拟）。修复采用自愈兜底：`PanelView` 的 background 挂 `PanelWindowSizeEnforcer`（NSViewRepresentable），布局时发现窗口 frame 与内容尺寸不一致即缩回内容大小（保持顶边与水平中心）并 `invalidateShadow()`；正常路径下尺寸一致为空操作，探针复测确认对 6 条正常路径零影响。67 测试全绿。**待用户按原路径实测确认鬼影不再出现。**无回归单测：需要真实 WindowServer 交互，超出单元测试能力。
 
 ## In Progress
 
