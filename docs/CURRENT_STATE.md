@@ -35,6 +35,8 @@ Updated: 2026-08-10
 
 - **列表相对时间（2026-08-14）**：消息行时间从「14:32」改为「5 分钟前 · 14:32」，绝对时间保留；相对时间为分钟粒度（<1 分钟「刚刚」，<60 分钟按分钟，<24 小时按小时），超 24 小时只留绝对日期时间（窄栏 240pt 放不下两段，且日期本身已说明远近）；服务器时钟超前导致的未来时间显示「刚刚」。`PanelView` 持 `@State now`，60 秒 Timer 推进 + `onAppear` 复位，面板常开时相对时间自动跟进。新增 `MessageRowViewTests` 6 例，73 测试全绿。
 
+- **v0.2.2 已发布（2026-08-14）**：含上面两项面板 UI 优化；release workflow 全绿（测试 → 通用二进制 → DMG → Release），产物 `Gotify-Mac-0.2.2.dmg`（571 KB），下载地址见 <https://github.com/zuijiaosy/gotify-mac/releases/tag/v0.2.2>。
+
 ## In Progress
 
 - 设置窗口手工验收剩余项（截图已确认：窗口可打开前置、TabView 为顶部工具栏标签样式、连接状态正常，见 `docs/screenshots/`）：
