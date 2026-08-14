@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// 列表行：优先级色点 + 应用名 + 时间 + 标题 + 摘要
+/// 列表行：优先级色点 + 应用名 + 时间（相对+绝对） + 标题 + 摘要
 struct MessageRowView: View {
     let message: GotifyMessage
     let appName: String
@@ -8,6 +8,8 @@ struct MessageRowView: View {
     let isUnread: Bool
     /// 双栏模式下列表变窄，隐藏摘要
     let compact: Bool
+    /// 计算"x 分钟前"的基准时刻，由面板按分钟推进
+    let now: Date
 
     var body: some View {
         HStack(alignment: .top, spacing: 8) {
@@ -22,9 +24,11 @@ struct MessageRowView: View {
                         .foregroundStyle(.secondary)
                         .lineLimit(1)
                     Spacer(minLength: 8)
-                    Text(Self.timeText(message.date))
+                    Text(Self.timeLabel(message.date, now: now))
                         .font(.caption)
                         .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                        .layoutPriority(1)
                 }
                 HStack(spacing: 4) {
                     if isUnread {
@@ -52,6 +56,23 @@ struct MessageRowView: View {
             in: RoundedRectangle(cornerRadius: 6)
         )
         .contentShape(Rectangle())
+    }
+
+    /// 相对时间 + 绝对时间；24 小时以上只留绝对时间（窄栏 240pt 放不下两段，
+    /// 且此时绝对日期本身已足够说明"多久以前"）
+    static func timeLabel(_ date: Date, now: Date) -> String {
+        guard let relative = relativeText(date, now: now) else { return timeText(date) }
+        return "\(relative) · \(timeText(date))"
+    }
+
+    /// 相对时间，分钟粒度；未来时间（服务器时钟偏差）按"刚刚"处理，超 24 小时返回 nil
+    static func relativeText(_ date: Date, now: Date) -> String? {
+        let minutes = Int(now.timeIntervalSince(date) / 60)
+        if minutes < 1 { return "刚刚" }
+        if minutes < 60 { return "\(minutes) 分钟前" }
+        let hours = minutes / 60
+        if hours < 24 { return "\(hours) 小时前" }
+        return nil
     }
 
     static func timeText(_ date: Date) -> String {

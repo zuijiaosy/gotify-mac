@@ -44,7 +44,7 @@ final class AppModel {
         switch state {
         case .checking: "检查中…"
         case .unconfigured(let hint): hint
-        case .connected(let user): "已连接：\(user)"
+        case .connected: "已连接"
         case .reconnecting(let hint): hint
         case .failed(let hint): hint
         }
