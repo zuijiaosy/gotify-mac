@@ -1,6 +1,6 @@
 # Current State
 
-Updated: 2026-08-10
+Updated: 2026-08-20
 
 ## Completed
 
@@ -36,6 +36,8 @@ Updated: 2026-08-10
 - **列表相对时间（2026-08-14）**：消息行时间从「14:32」改为「5 分钟前 · 14:32」，绝对时间保留；相对时间为分钟粒度（<1 分钟「刚刚」，<60 分钟按分钟，<24 小时按小时），超 24 小时只留绝对日期时间（窄栏 240pt 放不下两段，且日期本身已说明远近）；服务器时钟超前导致的未来时间显示「刚刚」。`PanelView` 持 `@State now`，60 秒 Timer 推进 + `onAppear` 复位，面板常开时相对时间自动跟进。新增 `MessageRowViewTests` 6 例，73 测试全绿。
 
 - **v0.2.2 已发布（2026-08-14）**：含上面两项面板 UI 优化；release workflow 全绿（测试 → 通用二进制 → DMG → Release），产物 `Gotify-Mac-0.2.2.dmg`（571 KB），下载地址见 <https://github.com/zuijiaosy/gotify-mac/releases/tag/v0.2.2>。
+
+- **断联时点「重新连接」崩溃修复（2026-08-20）**：4 份崩溃报告（0.2.1/0.2.2）栈完全一致——`GotifyStream.ping` 里 `CheckedContinuation` 被二次 resume 触发 SIGTRAP。根因：断联退避期间流循环挂起在 `sendPing` 上，此时 `refresh()` 取消旧流触发 `wsTask.cancel()`，Foundation 会把 `pongReceiveHandler` 回调两次（一次 ping 失败、一次取消）；已连接时挂起点在 `receive()`，无此问题，故只在断联重连时崩。修复：`ping` 的 continuation 用 `OSAllocatedUnfairLock` 做只 resume 一次保护，并抽出可注入 `send` 的重载供测试。回归测试 2 例（去掉保护实测复现同款 `SWIFT TASK CONTINUATION MISUSE` 崩溃，加回后通过），75 测试全绿。**修复尚未发版，用户装的 0.2.2 仍会崩，需随下个版本发布。**
 
 ## In Progress
 

@@ -19,6 +19,24 @@ import Testing
         #expect(delay <= .seconds(8 * 1.2))
     }
 
+    // 回归：断联时点「重新连接」会取消挂起中的 sendPing，Foundation 会把
+    // pongReceiveHandler 回调两次，旧实现二次 resume continuation 直接崩溃（SIGTRAP）
+    @Test func ping回调被调用两次不崩溃() async throws {
+        try await GotifyStream.ping { handler in
+            handler(nil)
+            handler(URLError(.cancelled))
+        }
+    }
+
+    @Test func ping回调两次时以首次错误为准() async {
+        await #expect(throws: URLError.self) {
+            try await GotifyStream.ping { handler in
+                handler(URLError(.networkConnectionLost))
+                handler(nil)
+            }
+        }
+    }
+
     @Test func websocket地址转换() {
         let http = GotifyStream.websocketURL(baseURL: URL(string: "http://127.0.0.1:18080")!)
         #expect(http?.absoluteString == "ws://127.0.0.1:18080/stream")

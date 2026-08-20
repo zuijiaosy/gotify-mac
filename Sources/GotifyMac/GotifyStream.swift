@@ -1,4 +1,5 @@
 import Foundation
+import os
 
 enum StreamEvent: Sendable {
     /// 收到首帧（视为连接成功），上层应做 REST 补拉
@@ -87,8 +88,23 @@ enum GotifyStream {
     }
 
     private static func ping(_ task: URLSessionWebSocketTask) async throws {
+        try await ping(send: task.sendPing)
+    }
+
+    /// sendPing 的 pongReceiveHandler 在「连接失败叠加任务取消」时会被 Foundation
+    /// 回调两次，continuation 只允许 resume 一次，多余的回调必须丢弃（否则崩溃）
+    static func ping(
+        send: (@escaping @Sendable (Error?) -> Void) -> Void
+    ) async throws {
+        let resumed = OSAllocatedUnfairLock(initialState: false)
         try await withCheckedThrowingContinuation { (cont: CheckedContinuation<Void, Error>) in
-            task.sendPing { error in
+            send { error in
+                let isFirst = resumed.withLock { done in
+                    if done { return false }
+                    done = true
+                    return true
+                }
+                guard isFirst else { return }
                 if let error {
                     cont.resume(throwing: error)
                 } else {
