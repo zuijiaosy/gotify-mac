@@ -1,6 +1,6 @@
 # Current State
 
-Updated: 2026-08-20
+Updated: 2026-08-28
 
 ## Completed
 
@@ -39,6 +39,17 @@ Updated: 2026-08-20
 
 - **断联时点「重新连接」崩溃修复（2026-08-20）**：4 份崩溃报告（0.2.1/0.2.2）栈完全一致——`GotifyStream.ping` 里 `CheckedContinuation` 被二次 resume 触发 SIGTRAP。根因：断联退避期间流循环挂起在 `sendPing` 上，此时 `refresh()` 取消旧流触发 `wsTask.cancel()`，Foundation 会把 `pongReceiveHandler` 回调两次（一次 ping 失败、一次取消）；已连接时挂起点在 `receive()`，无此问题，故只在断联重连时崩。修复：`ping` 的 continuation 用 `OSAllocatedUnfairLock` 做只 resume 一次保护，并抽出可注入 `send` 的重载供测试。回归测试 2 例（去掉保护实测复现同款 `SWIFT TASK CONTINUATION MISUSE` 崩溃，加回后通过），75 测试全绿。**v0.2.3 已发布（2026-08-20）**：workflow 全绿（测试 → 通用二进制 → DMG → Release），产物 `Gotify-Mac-0.2.3.dmg`（573 KB），<https://github.com/zuijiaosy/gotify-mac/releases/tag/v0.2.3>。
 
+- **设置窗口「通用」标签 + 开机自启（2026-08-28，ADR-014）**：`LaunchAtLogin.swift` 封装 `SMAppService.mainApp` 的 register/unregister；开关状态**不落 config.json**，每次标签出现时读 `SMAppService.mainApp.status` 作唯一真值，注册失败开关回弹到系统真实状态并显示系统原文 + 「确认应用在应用程序文件夹」指引，`requiresApproval` 时提示去系统设置允许。同标签展示 bundle 版本号（动因见下条：用户此前无从判断自己跑的是哪个版本）。`build-app.sh` 无需改动（`mainApp` 不需要 helper bundle）。**ad-hoc 签名下的真实行为待用户实测**（BTM 以 code signature 标识登录项，ad-hoc 每次构建 cdhash 都变）。
+
+- **重连闪退收尾：真因是没升级，外加三项预防性加固（2026-08-28）**：用户报「重新检查连接仍会闪退」，取证后确认**不是代码回归**——`/Applications/Gotify Mac.app` 装的仍是 0.2.2（8-14 构建），三份新崩溃报告（8-24/25/26）`app_version` 全是 0.2.2，栈里符号是旧签名 `ping(_:)`（修复后应落在 `ping(send:)`），即 v0.2.3 的修复从未装到机器上。已本地构建 0.2.4 替换安装。
+  在此之上做了三项**预防性**加固（均无崩溃报告佐证）：
+  1. `receive()` 补同款保护——它与已修的 `sendPing` 完全同构，且此前用的是 Foundation 自动生成的 async thunk，continuation 不由我们掌握、无从保护；现改用 completion handler 版，与 ping 共用新的 `firstResult` 收敛器（只认首次回调）。
+  2. `ping` 加 10s 超时——原实现只防「多回调」没防「零回调」，Foundation 在 wsTask 已终态时若吞掉回调，continuation 永不 resume，整条流永久挂起且 `cancel` 唤不醒，每点一次重连再泄漏一个 Task。超时任务的取消放在 `defer` 而非 `finish` 里，避免 `OSAllocatedUnfairLock` 不可重入导致死锁。
+  3. 「重新检查连接」加节流——`AppModel.isRefreshing` + 按钮 `.disabled`，连点不再并发起多条 WebSocket（这正是用户描述的操作特征）。`scheduleRetry` 撞上进行中的刷新时跳过该次重试，是预期行为。
+  明确**不做**「refresh 等旧流真正退出再开新流」：做完 1、2 之后新旧连接短暂并存的唯一危害只剩多一次幂等补拉，而 `await streamTask?.value` 有引入新死锁的实际风险。
+  另排除一个误报：曾怀疑 `GotifyClient.makeRequest` 的两处 `!` 会崩，实测否掉——能通过 `URL(string:)` 的输入都不会让 `URLComponents.url` 返回 nil，`"127.0.0.1:18080"` 这类畸形输入在 `URL(string:)` 就被挡掉并走 `.unconfigured`。
+  测试 82 例全绿（新增 7：receive 二次回调 2、ping 超时/正常 2、LaunchAtLogin 纯函数 3）。摘掉保护实测复现同款 `SWIFT TASK CONTINUATION MISUSE` + signal 5，加回后通过。三轮 docker down/up 断连重连压测应用全程存活、无新增崩溃报告。
+
 ## In Progress
 
 - 设置窗口手工验收剩余项（截图已确认：窗口可打开前置、TabView 为顶部工具栏标签样式、连接状态正常，见 `docs/screenshots/`）：
@@ -48,12 +59,14 @@ Updated: 2026-08-20
 ## Not Implemented
 
 - 系统睡眠/唤醒专门处理（当前靠重连退避兜底）、网络切换主动探测。
-- 登录时启动、消息删除、逐条已读（当前只有全部已读水位线，ADR-011）。
+- 消息删除、逐条已读（当前只有全部已读水位线，ADR-011）。
 - PR/push 的持续集成（当前只有打标签触发的发布 workflow）、应用内自动更新、公证。
 
 ## Known Issues
 
 - 端口 8080 被本机 nginx/OrbStack 占用，服务端固定用 18080。
+- **v0.2.3 以前的版本存在 `GotifyStream.ping` continuation 二次 resume 崩溃**（断联时点「重新连接」触发）。本机曾因迟迟未升级而在 8-24/25/26 持续复现同一个已修 bug，一度被误判为修复失效——排查崩溃前先用设置窗口「通用」标签核对运行中的版本号。
+- 开机自启在 ad-hoc 签名下的行为未经验证（ADR-014），可能注册失败或在系统登录项里显示异常。
 - Token 明文存 config.json（权限 600，ADR-008 已知取舍）。
 - macOS 26 实测系统通知授权对 ad-hoc / 自签名 / Apple Development 证书均难以稳定通过（拒绝记录绑定应用路径且无法在系统设置中重置），已决策放弃系统通知横幅并移除其 UI 入口（工具栏警示图标、设置「通知」标签），以菜单栏未读圆点为唯一提醒（ADR-012）。
 - 面板宽度两档硬切无动画（NSPanel resize 与 SwiftUI 动画不同步，属有意取舍）。
@@ -63,4 +76,5 @@ Updated: 2026-08-20
 
 1. 用户授权终端权限后跑 `scripts/e2e-ui-check.sh` 完成 UI 截图验收；按上面清单手工验收设置窗口。
 2. 在真实 Mac 上手工验证 v0.2.0 DMG 的 Gatekeeper 放行步骤（右键打开 / xattr）与安装体验。
-3. 后续迭代：设置窗口「通用」标签（开机自启，SMAppService，需实测 ad-hoc 签名下行为）、睡眠/唤醒处理。
+3. 实测开机自启在 ad-hoc 签名下是否真的生效（打开开关 → 系统设置查登录项 → 重启验证），结果回填 ADR-014。
+4. 后续迭代：睡眠/唤醒处理；本次 0.2.4 只做了本地安装，未打 tag 发版。

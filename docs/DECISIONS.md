@@ -262,3 +262,28 @@ DMG 打包逻辑放在 `scripts/make-dmg.sh` 而不是写进 workflow，本地�
 - 版本号唯一来源是 git 标签，`Support/Info.plist` 里的 `0.1.0` 只作为本地构建的缺省值。
 - 本机无法验证通用二进制构建（缺 Xcode），该路径只在 CI 上生效，首次发版需确认 `lipo -info` 输出两个架构（workflow 内已加该检查步骤）。
 - 没有自动更新机制，用户需自行回到 Releases 页下载新版本。
+
+## ADR-014：开机自启用 SMAppService.mainApp，开关状态不落 config.json
+
+- Status: Accepted
+- Date: 2026-08-28
+
+### Decision
+
+设置窗口新增「通用」标签，登录时启动通过 `SMAppService.mainApp` 的 `register()` / `unregister()` 实现（`Sources/GotifyMac/LaunchAtLogin.swift` 薄封装）。
+
+**开关状态不写入 config.json**：UI 每次出现时读 `SMAppService.mainApp.status` 作为唯一真值，注册失败时开关回弹到系统真实状态并在下方显示原因。
+
+「通用」标签同时展示 bundle 版本号（`CFBundleShortVersionString` + `CFBundleVersion`）。
+
+### Rationale
+
+- `SMAppService` 是 macOS 13+ 的官方登录项 API，不需要单独的 helper bundle，也不需要往 `~/Library/LaunchAgents` 写 plist。本项目是 `LSUIElement` 菜单栏应用，`mainApp` 正是为这种形态准备的，`scripts/build-app.sh` 无需任何改动。
+- 状态不落盘是为了避免双真值：用户可以随时在「系统设置 → 通用 → 登录项」里直接关掉，本地若再存一份布尔，两边必然漂移，且 config.json 会显示一个假的「已开启」。副作用是省掉了 ADR-009 要求的 `decodeIfPresent` 字段兼容工作。
+- 展示版本号的直接动因见 CURRENT_STATE 的 2026-08-28 条目：用户此前无从得知自己运行的是哪个版本，导致一个已修复的崩溃被当成未修复反复报告。
+
+### Consequences
+
+- 注册结果依赖系统，代码无法保证成功；失败时不吞错误，把系统原文连同「确认应用在应用程序文件夹」的指引一并显示。
+- ad-hoc 签名（ADR-013）下 BTM 以 code signature 标识登录项，而 ad-hoc 每次重新构建 cdhash 都会变，可能出现注册失败、系统登录项显示为路径而非应用名、或旧构建残留成重复条目。**该行为需用户实测确认，尚未验证。**
+- `SMAppService` 不进单元测试——真跑会真往系统登录项写入。只有错误映射与批准提示这两个纯函数有测试覆盖。
