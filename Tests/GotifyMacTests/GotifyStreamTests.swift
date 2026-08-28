@@ -37,6 +37,42 @@ import Testing
         }
     }
 
+    // ping 的反面：Foundation 也可能一次都不回调（wsTask 已终态时），
+    // 没有超时兜底的话 continuation 永不 resume，整条流永久挂起且 cancel 唤不醒
+    @Test func ping零回调时超时抛出() async {
+        await #expect(throws: URLError.self) {
+            try await GotifyStream.ping(timeout: .milliseconds(20)) { _ in }
+        }
+    }
+
+    @Test func ping正常返回时不受超时影响() async throws {
+        try await GotifyStream.ping(timeout: .seconds(30)) { handler in handler(nil) }
+    }
+
+    // 回归：receive 与 sendPing 同构——取消 wsTask 时 Foundation 同样可能把
+    // 完成回调调两次，二次 resume continuation 会 SIGTRAP
+    @Test func receive回调被调用两次不崩溃() async throws {
+        let frame = try await GotifyStream.receive { handler in
+            handler(.success(.string("first")))
+            handler(.failure(URLError(.cancelled)))
+        }
+        // Message 不是 Equatable，取出负载再断言
+        guard case .string(let text) = frame else {
+            Issue.record("期望 .string 帧")
+            return
+        }
+        #expect(text == "first")
+    }
+
+    @Test func receive回调两次时以首次错误为准() async {
+        await #expect(throws: URLError.self) {
+            _ = try await GotifyStream.receive { handler in
+                handler(.failure(URLError(.networkConnectionLost)))
+                handler(.success(.string("late")))
+            }
+        }
+    }
+
     @Test func websocket地址转换() {
         let http = GotifyStream.websocketURL(baseURL: URL(string: "http://127.0.0.1:18080")!)
         #expect(http?.absoluteString == "ws://127.0.0.1:18080/stream")

@@ -21,6 +21,8 @@ final class AppModel {
     private(set) var apps: [Int: GotifyApplication] = [:]
     /// nil = 单栏列表；非 nil = 双栏并选中该消息
     var selectedMessageID: Int?
+    /// 刷新进行中；UI 据此禁用「重新检查连接」，防止连点并发起多条 WebSocket
+    private(set) var isRefreshing = false
 
     private var client: GotifyClient?
     private var streamTask: Task<Void, Never>?
@@ -80,6 +82,11 @@ final class AppModel {
 
     /// 重读配置、验证连接、加载应用与消息、重启实时流
     func refresh() async {
+        // 连点会并发起多条 WebSocket，把 Foundation 二次回调的竞态窗口放大。
+        // scheduleRetry 撞上进行中的刷新时这次重试被跳过，正是想要的行为。
+        guard !isRefreshing else { return }
+        isRefreshing = true
+        defer { isRefreshing = false }
         refreshGeneration += 1
         let generation = refreshGeneration
         streamTask?.cancel()

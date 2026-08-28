@@ -42,7 +42,7 @@ enum GotifyStream {
                         while !Task.isCancelled {
                             // onCancel 里取消 wsTask，让挂起中的 receive 立即抛错退出
                             let frame = try await withTaskCancellationHandler {
-                                try await wsTask.receive()
+                                try await receive(wsTask)
                             } onCancel: {
                                 wsTask.cancel(with: .goingAway, reason: nil)
                             }
@@ -88,29 +88,67 @@ enum GotifyStream {
     }
 
     private static func ping(_ task: URLSessionWebSocketTask) async throws {
-        try await ping(send: task.sendPing)
+        try await ping { handler in task.sendPing(pongReceiveHandler: handler) }
     }
 
     /// sendPing 的 pongReceiveHandler 在「连接失败叠加任务取消」时会被 Foundation
-    /// 回调两次，continuation 只允许 resume 一次，多余的回调必须丢弃（否则崩溃）
+    /// 回调两次，continuation 只允许 resume 一次，多余的回调必须丢弃（否则崩溃）。
+    /// 反过来 Foundation 也可能在 wsTask 已终态时一次都不回调，那样 continuation
+    /// 永不 resume——整条流永久挂起、cancel 也唤不醒，所以另加超时兜底。
     static func ping(
+        timeout: Duration = .seconds(10),
         send: (@escaping @Sendable (Error?) -> Void) -> Void
     ) async throws {
+        try await firstResult(timeout: timeout) { finish in
+            send { error in finish(error.map { .failure($0) } ?? .success(())) }
+        }
+    }
+
+    private static func receive(
+        _ task: URLSessionWebSocketTask
+    ) async throws -> URLSessionWebSocketTask.Message {
+        try await receive { handler in task.receive(completionHandler: handler) }
+    }
+
+    /// receive 的完成回调与 sendPing 同构：取消 wsTask 时 Foundation 同样可能回调两次。
+    /// async 版 `receive()` 的 continuation 由 Foundation 生成、我们无从保护，
+    /// 所以改用 completion handler 版自己接管。长连接空闲等待是正常状态，不设超时。
+    static func receive(
+        receive: (@escaping @Sendable (Result<URLSessionWebSocketTask.Message, Error>) -> Void) -> Void
+    ) async throws -> URLSessionWebSocketTask.Message {
+        try await firstResult(timeout: nil) { finish in receive(finish) }
+    }
+
+    /// 把「可能回调多次、也可能一次都不回调」的 Foundation 完成回调收敛成一次 resume：
+    /// 只认首次结果，其余丢弃；timeout 非 nil 时到点抛 `URLError(.timedOut)` 兜底。
+    private static func firstResult<T: Sendable>(
+        timeout: Duration?,
+        start: (@escaping @Sendable (Result<T, Error>) -> Void) -> Void
+    ) async throws -> T {
         let resumed = OSAllocatedUnfairLock(initialState: false)
-        try await withCheckedThrowingContinuation { (cont: CheckedContinuation<Void, Error>) in
-            send { error in
+        // 超时任务只在 defer 里取消——取消动作若放进 finish 就会与这里的赋值
+        // 嵌套加锁，OSAllocatedUnfairLock 不可重入，那是个死锁
+        let timeoutTask = OSAllocatedUnfairLock(initialState: nil as Task<Void, Never>?)
+        defer { timeoutTask.withLock { $0?.cancel() } }
+        return try await withCheckedThrowingContinuation { (cont: CheckedContinuation<T, Error>) in
+            @Sendable func finish(_ result: Result<T, Error>) {
                 let isFirst = resumed.withLock { done in
                     if done { return false }
                     done = true
                     return true
                 }
                 guard isFirst else { return }
-                if let error {
-                    cont.resume(throwing: error)
-                } else {
-                    cont.resume()
+                cont.resume(with: result)
+            }
+            if let timeout {
+                timeoutTask.withLock {
+                    $0 = Task {
+                        do { try await Task.sleep(for: timeout) } catch { return }
+                        finish(.failure(URLError(.timedOut)))
+                    }
                 }
             }
+            start { finish($0) }
         }
     }
 

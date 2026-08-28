@@ -65,6 +65,7 @@ struct PanelView: View {
                 Button("重新检查连接") {
                     Task { await model.refresh() }
                 }
+                .disabled(model.isRefreshing)
                 Divider()
                 Button("退出 Gotify Mac") {
                     NSApplication.shared.terminate(nil)
