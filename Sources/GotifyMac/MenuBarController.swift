@@ -28,6 +28,7 @@ final class MenuBarController: NSObject, NSPopoverDelegate, NSWindowDelegate {
         item.button?.action = #selector(togglePanel)
         item.button?.toolTip = "Gotify Mac"
         popover.behavior = .transient
+        popover.appearance = NSAppearance(named: .aqua)
         popover.animates = false
         popover.delegate = self
         popover.contentViewController = NSHostingController(rootView: PanelView(

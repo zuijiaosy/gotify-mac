@@ -28,6 +28,8 @@ struct PanelView: View {
             }
         }
         .frame(height: 480)
+        .background(Color.white)
+        .environment(\.colorScheme, .light)
         .onChange(of: expanded) { _, value in resize(value) }
         .onReceive(minuteTicker) { now = $0 }
         .onAppear {

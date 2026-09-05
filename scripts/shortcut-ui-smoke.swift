@@ -45,6 +45,9 @@ import SwiftUI
     private func settle() async throws { try await Task.sleep(for: .milliseconds(250)) }
 
     private func checkFlow() async throws {
+        // The reading panel must stay opaque white even when the app uses dark appearance.
+        NSApp.appearance = NSAppearance(named: .darkAqua)
+        defer { NSApp.appearance = nil }
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: directory) }
         let configURL = directory.appendingPathComponent("config.json")
@@ -78,6 +81,7 @@ import SwiftUI
         try await settle()
         try check(controller.popover.contentSize.width == 360, "Reopened panel did not reset its width")
         controller.showSettings()
+        NSApp.appearance = nil
         try await settle()
         try check(!controller.popover.isShown, "Settings did not close panel")
         try check(controller.settingsWindow?.isVisible == true, "Settings window did not open")
@@ -129,6 +133,14 @@ import SwiftUI
             throw NSError(domain: "ShortcutUISmoke", code: 2)
         }
         view.cacheDisplay(in: view.bounds, to: bitmap)
+        if name.hasPrefix("panel-") {
+            guard let pixel = bitmap.colorAt(x: 4, y: bitmap.pixelsHigh / 2)?.usingColorSpace(.deviceRGB) else {
+                throw NSError(domain: "ShortcutUISmoke", code: 4)
+            }
+            try check(pixel.alphaComponent > 0.99 && pixel.redComponent > 0.99
+                      && pixel.greenComponent > 0.99 && pixel.blueComponent > 0.99,
+                      "Panel background must be opaque white before screenshot compositing")
+        }
         // Flatten transparent hosting-view pixels onto the native window background.
         let image = NSImage(size: view.bounds.size)
         image.lockFocus()
