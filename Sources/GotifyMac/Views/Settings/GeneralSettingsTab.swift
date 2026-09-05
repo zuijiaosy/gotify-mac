@@ -1,9 +1,9 @@
 import ServiceManagement
 import SwiftUI
 
-/// 通用标签：登录时启动 + 版本号。开关即时生效（ADR-009：只有服务器地址与
-/// Token 走草稿 + 显式提交）；状态不落盘，每次出现时重新问系统（ADR-014）。
+/// 通用设置即时生效；登录启动状态由系统管理，快捷键写入配置。
 struct GeneralSettingsTab: View {
+    let shortcuts: GlobalShortcuts
     @State private var launchAtLogin = false
     @State private var hint: String?
 
@@ -21,6 +21,33 @@ struct GeneralSettingsTab: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
+            Section("全局快捷键") {
+                ForEach(ShortcutAction.allCases, id: \.rawValue) { action in
+                    LabeledContent(action.title) {
+                        HStack {
+                            Button {
+                                shortcuts.beginRecording(action)
+                            } label: {
+                                Text(shortcuts.recording == action ? "请按组合键…" :
+                                     shortcuts.bindings[action]?.displayName ?? "未设置")
+                                    .frame(width: 115)
+                            }
+                            .help("录入快捷键，Escape 取消")
+                            Button {
+                                shortcuts.update(action, to: nil)
+                            } label: {
+                                Image(systemName: "xmark.circle")
+                            }
+                            .buttonStyle(.borderless)
+                            .help("清除快捷键")
+                            .disabled(shortcuts.bindings[action] == nil && shortcuts.recording != action)
+                        }
+                    }
+                    if let error = shortcuts.errors[action] {
+                        Text(error).font(.caption).foregroundStyle(.red)
+                    }
+                }
+            }
             Section {
                 LabeledContent("版本", value: Self.versionText)
                     .font(.caption)
@@ -28,6 +55,7 @@ struct GeneralSettingsTab: View {
         }
         .formStyle(.grouped)
         .onAppear(perform: syncFromSystem)
+        .onDisappear { shortcuts.cancelRecording() }
     }
 
     /// 系统才是真值：用户可能在系统设置里改过，每次出现都重新读

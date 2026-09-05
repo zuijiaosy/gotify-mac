@@ -16,9 +16,10 @@
 
 ## 功能
 
-- **菜单栏常驻**：`MenuBarExtra` 面板，无 Dock 图标；单栏消息列表，点击展开双栏详情。
+- **菜单栏常驻**：原生菜单栏弹出面板，无 Dock 图标；单栏消息列表，点击展开双栏详情。
 - **实时接收**：WebSocket stream 实时推送；断线指数退避自动重连，重连后补拉遗漏消息并去重。
 - **未读提醒**：有未读消息时菜单栏铃铛变为角标样式，列表中未读消息带圆点标记，一键全部已读。
+- **全局快捷键**：默认 `Control+Option+G` 显示/隐藏面板，`Control+Option+R` 后台全部已读；在「设置 → 通用」中修改或清除，即时生效。
 - **优先级标识**：四档色点直观区分消息优先级（≥8 红、4–7 橙、1–3 蓝、0 灰）。
 - **应用内设置**：服务器地址、Client Token（带连接测试），即改即生效。
 - **隐私友好**：消息只在内存中保留最近 200 条，不落盘；配置存放在本地用户目录，Token 不进源码、日志和 Git。
@@ -63,6 +64,8 @@ cd gotify-mac
 
 配置保存在 `~/Library/Application Support/GotifyMac/config.json`（文件权限 600），也可以直接手工编辑该文件。
 
+快捷键仅在应用运行时有效；录入时按 Escape 取消，组合键须包含 Command、Control 或 Option。按键按物理键位保存，名称采用 ANSI 键位标识。若系统报告快捷键被占用，设置中会显示错误，可换用其他组合键。无需辅助功能或输入监控授权。
+
 ## 开发
 
 ### 本地 Gotify 服务端
@@ -84,6 +87,7 @@ scripts/make-dmg.sh            # 把已组装的 .app 打成 build/Gotify-Mac-<�
 scripts/test.sh                # 单元测试（CLT 环境必须用此脚本，不要直接 swift test）
 GOTIFY_E2E=1 scripts/test.sh   # 含打真实本地服务端的集成测试
 scripts/e2e-ui-check.sh        # 半自动端到端 UI 验证（需终端有辅助功能+屏幕录制权限）
+bash scripts/shortcut-ui-smoke.sh # 原生面板与快捷键 UI 冒烟检查，使用虚构数据
 ```
 
 ### 发布

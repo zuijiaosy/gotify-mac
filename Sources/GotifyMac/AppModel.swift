@@ -25,6 +25,7 @@ final class AppModel {
     private(set) var isRefreshing = false
 
     private var client: GotifyClient?
+    private let configURL: URL
     private var streamTask: Task<Void, Never>?
     private var retryTask: Task<Void, Never>?
     /// 连续瞬时连接失败次数，成功后清零，驱动自动重试的退避
@@ -65,13 +66,27 @@ final class AppModel {
 
     /// 把水位线推到当前最大消息 id：之后到达的消息才算未读
     func markAllRead() {
+        guard hasUnread else { return }
         var new = config
         new.lastReadMessageID = store.maxKnownID
         saveConfig(new)
     }
 
+    func saveShortcuts(_ bindings: [ShortcutAction: KeyboardShortcutBinding]) throws {
+        var updated = config
+        updated.togglePanelShortcut = bindings[.togglePanel]
+        updated.markAllReadShortcut = bindings[.markAllRead]
+        try AppConfig.save(updated, to: configURL)
+        config = updated
+    }
+
     /// autoStart: false 供测试使用，避免测试进程读取真实配置、访问真实服务器
-    init(autoStart: Bool = true) {
+    init(autoStart: Bool = true, initialConfig: AppConfig = .default,
+         initialStore: MessageStore = MessageStore(), configURL: URL = AppConfig.fileURL) {
+        self.configURL = configURL
+        config = initialConfig
+        serverURL = initialConfig.serverURL
+        store = initialStore
         if autoStart {
             Task {
                 await notifier.setUp()
@@ -94,7 +109,7 @@ final class AppModel {
         retryTask?.cancel()
         retryTask = nil
         state = .checking
-        let config = AppConfig.load()
+        let config = AppConfig.load(from: configURL)
         self.config = config
         serverURL = config.serverURL
 
@@ -109,7 +124,7 @@ final class AppModel {
             // 首次启动 lastIdentity 为 nil 也走本分支，须跳过否则每次启动都清掉持久化的水位线
             if lastIdentity != nil, config.lastReadMessageID != 0 {
                 self.config.lastReadMessageID = 0
-                try? AppConfig.save(self.config)
+                try? AppConfig.save(self.config, to: configURL)
             }
             lastIdentity = identity
         }
@@ -176,7 +191,7 @@ final class AppModel {
         let reconnect = new.serverURL != config.serverURL
             || new.clientToken != config.clientToken
         config = new
-        try? AppConfig.save(new)
+        try? AppConfig.save(new, to: configURL)
         if reconnect { Task { await refresh() } }
     }
 

@@ -9,6 +9,8 @@ struct AppConfig: Codable {
     var soundEnabled: Bool
     /// 已读水位线：id 大于它的消息视为未读；0 = 从未标记过已读（ADR-011）
     var lastReadMessageID: Int
+    var togglePanelShortcut: KeyboardShortcutBinding? = .togglePanel
+    var markAllReadShortcut: KeyboardShortcutBinding? = .markAllRead
 
     static let fileURL: URL = FileManager.default
         .urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
@@ -40,6 +42,35 @@ struct AppConfig: Codable {
         notificationsEnabled = try c.decodeIfPresent(Bool.self, forKey: .notificationsEnabled) ?? true
         soundEnabled = try c.decodeIfPresent(Bool.self, forKey: .soundEnabled) ?? true
         lastReadMessageID = try c.decodeIfPresent(Int.self, forKey: .lastReadMessageID) ?? 0
+        togglePanelShortcut = Self.decodeShortcut(c, key: .togglePanelShortcut, fallback: .togglePanel)
+        markAllReadShortcut = Self.decodeShortcut(c, key: .markAllReadShortcut, fallback: .markAllRead)
+    }
+
+    private static func decodeShortcut(
+        _ container: KeyedDecodingContainer<CodingKeys>, key: CodingKeys,
+        fallback: KeyboardShortcutBinding
+    ) -> KeyboardShortcutBinding? {
+        guard container.contains(key) else { return fallback }
+        guard let value = try? container.decode(KeyboardShortcutBinding.self, forKey: key),
+              value.isValid else { return nil }
+        return value
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        try c.encode(serverURL, forKey: .serverURL)
+        try c.encode(clientToken, forKey: .clientToken)
+        try c.encode(notificationsEnabled, forKey: .notificationsEnabled)
+        try c.encode(soundEnabled, forKey: .soundEnabled)
+        try c.encode(lastReadMessageID, forKey: .lastReadMessageID)
+        // Explicit null distinguishes a cleared shortcut from an older config.
+        try c.encode(togglePanelShortcut, forKey: .togglePanelShortcut)
+        try c.encode(markAllReadShortcut, forKey: .markAllReadShortcut)
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case serverURL, clientToken, notificationsEnabled, soundEnabled, lastReadMessageID
+        case togglePanelShortcut, markAllReadShortcut
     }
 
     static func load(from url: URL = fileURL) -> AppConfig {

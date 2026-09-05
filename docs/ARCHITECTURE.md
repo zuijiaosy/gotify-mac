@@ -1,19 +1,20 @@
 # Architecture
 
-Updated: 2026-08-09
+Updated: 2026-09-05
 
 ## 当前实现
 
 MVP 已实现（详见 ADR-006/007/008）：
 
-- **Configuration**：`AppConfig.swift` 读写 `~/Library/Application Support/GotifyMac/config.json`（ADR-008/009）：服务器地址、Client Token、通知偏好；缺字段容错解码、原子写后重设权限 600；load/save 路径可注入以便测试。写入唯一入口是 `AppModel.saveConfig`，View 不直接落盘。
+- **Configuration**：`AppConfig.swift` 读写 `~/Library/Application Support/GotifyMac/config.json`（ADR-008/009）：服务器地址、Client Token、通知偏好、已读水位线与两个全局快捷键；缺字段容错解码、原子写后重设权限 600；load/save 路径可注入以便测试。写入由 `AppModel` 统一处理，View 不直接落盘；快捷键经 `saveShortcuts` 先保存成功再更新内存，错误反馈设置界面，不触发重连。
 - **Networking**：`GotifyClient.swift`（REST：current/user、application、message 分页与补拉，`HTTPDataFetching` 协议注入可测）；`GotifyStream.swift`（WebSocket /stream，AsyncStream 封装，ping 确认握手，指数退避重连 1s→60s ±20% 抖动，取消即断开）。`sendPing`/`receive` 都不用 Foundation 的 async 版本，改由 `firstResult` 接管 completion handler：取消 wsTask 时 Foundation 可能把回调调两次，二次 resume continuation 会 SIGTRAP（ADR-014 条目下的 2026-08-20/28 记录）；ping 另加 10s 超时，防 Foundation 一次都不回调导致整条流永久挂起。
 - **Message Store**：`MessageStore.swift`，纯逻辑 struct，按 id 去重/降序/保留最近 200 条（不落盘，符合 ADR-002），`merge` 返回真正新增项供通知判断。
 - **Markdown 渲染**：`MarkdownRendering.swift`（ADR-010）。`GotifyMessage.extras` 解析 Gotify 约定键 `client::display.contentType`，声明 `text/markdown` 时详情页用 `MarkdownRenderer.attributedBody` 渲染样式，列表行与通知横幅用 `plainPreview` 剥标记后的纯文本（这两处无法渲染富文本）。未声明 contentType 的消息行为与改造前完全一致。extras 解码两级 `init(from:)` 均不抛错，畸形 extras 降级为 nil——`GotifyStream.decode` 用 `try?` 解码，抛错会导致实时消息被静默丢弃。
 - **Notification Service**：`NotificationService.swift`，UNUserNotificationCenter 封装；非 .app 环境（swift run/测试进程）自动降级不触碰 UN API；`willPresent` 保证前台横幅；仅对 `insert` 成功的新消息通知。注意：本机 ad-hoc 签名下授权必被系统拒绝，服务静默降级，UI 入口已移除（ADR-012），提醒依赖未读圆点。
 - **登录自启**：`LaunchAtLogin.swift`（ADR-014），`SMAppService.mainApp` 薄封装；系统是开关状态的唯一真值，不落 config.json；注册失败的中文提示与「待批准」提示是纯函数、有测试覆盖，`SMAppService` 本身不进单测。
 - **协调者**：`AppModel.swift`（@MainActor @Observable），连接状态机（checking/unconfigured/connected/reconnecting/failed）、初始 REST 加载、流生命周期、重连后 `messagesNewer` 补拉、面板选中态、已读水位线（ADR-011：`markAllRead` 推进 `config.lastReadMessageID`，身份变化时归零）。
-- **UI**：`Views/PanelView.swift`（MenuBarExtra `.window` 样式，单栏 360 ↔ 双栏 240+400 两档定宽硬切）、`MessageRowView.swift`（优先级色点 ≥8 红/4-7 橙/1-3 蓝/0 灰）、`MessageDetailView.swift`（详情/复制/返回）、`Views/Settings/`（Settings scene + TabView 顶部标签式设置窗口：服务器标签草稿+显式提交+测试连接，通用标签登录自启+版本号；LSUIElement 下打开设置前手动 activate 前置窗口）。
+- **UI**：AppKit 应用生命周期持有 `MenuBarController`（ADR-015），用 `NSStatusItem` + transient `NSPopover` 承载 SwiftUI `PanelView`；鼠标与快捷键共用显示/隐藏入口，关闭时清除选中态。单栏 360 ↔ 双栏 641 两档定宽，由 popover.contentSize 控制，不再修补宿主窗口 frame。消息列表、优先级色点和详情视图继续复用。设置使用单例 `NSWindow` + SwiftUI `TabView`，手动激活并前置；通用标签包含登录自启、两个快捷键和版本号。AppKit 编辑菜单保留输入框复制、粘贴等标准操作。
+- **全局快捷键**：`GlobalShortcuts.swift` 封装可注入的注册器、设置事务与录入状态；Carbon `RegisterEventHotKey` 独占注册，按下/释放状态避免长按重复触发，无辅助功能或输入监控权限。录入时注销两个快捷键，完成、取消、设置失焦或关闭后恢复；修改失败回退旧注册，启动时失败项独立显示错误。默认 Control+Option+G 显示/隐藏，Control+Option+R 全部已读。配置缺字段采用默认，null 表示禁用，非法单项禁用而不丢弃其他配置。退出时注销快捷键和事件处理器。
 - **测试**：`Tests/GotifyMacTests/` 单元测试 + `GOTIFY_E2E=1` 门控集成测试（打真实 docker 服务端）；`scripts/test.sh` 包装 CLT 环境所需的 Testing.framework 路径；`scripts/e2e-ui-check.sh` 半自动 UI 截图验证。
 - 打包 `scripts/build-app.sh` / 一键启动 `start.sh`；本地服务端 `deploy/gotify/docker-compose.yml`（2.7.3，端口 18080）。
 
@@ -86,4 +87,3 @@ Gotify Server 是远端消息内容的权威来源。macOS 客户端负责连接
 - 本地缓存技术、容量与淘汰策略。
 - WebSocket 在网络切换、系统睡眠和唤醒后的恢复策略。
 - 菜单栏应用是否同时提供常规窗口和 Dock 行为。
-

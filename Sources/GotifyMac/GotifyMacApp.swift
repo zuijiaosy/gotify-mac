@@ -1,20 +1,25 @@
-import SwiftUI
+import AppKit
 
 @main
-struct GotifyMacApp: App {
-    @State private var model = AppModel()
+enum GotifyMacApp {
+    @MainActor static func main() {
+        let application = NSApplication.shared
+        let delegate = AppDelegate()
+        application.delegate = delegate
+        application.setActivationPolicy(.accessory)
+        withExtendedLifetime(delegate) { application.run() }
+    }
+}
 
-    var body: some Scene {
-        MenuBarExtra {
-            PanelView(model: model)
-        } label: {
-            // 在 label 内读取可观察属性才能建立依赖，图标才会随未读状态刷新
-            Image(systemName: model.hasUnread ? "bell.badge" : "bell")
-        }
-        .menuBarExtraStyle(.window)
+@MainActor
+final class AppDelegate: NSObject, NSApplicationDelegate {
+    private var controller: MenuBarController?
 
-        Settings {
-            SettingsView(model: model)
-        }
+    func applicationDidFinishLaunching(_ notification: Notification) {
+        controller = MenuBarController(model: AppModel(initialConfig: AppConfig.load()))
+    }
+
+    func applicationWillTerminate(_ notification: Notification) {
+        controller?.stop()
     }
 }

@@ -1,10 +1,10 @@
 import SwiftUI
 
-/// 面板根视图：单栏列表(360) ↔ 双栏列表+详情(240+400)，宽度两档硬切不做动画
-/// （NSPanel resize 与 SwiftUI 动画不同步，会闪烁）。
+/// 面板根视图：单栏列表(360) ↔ 双栏列表+详情(240+400)，由 popover 控制两档宽度。
 struct PanelView: View {
     let model: AppModel
-    @Environment(\.openSettings) private var openSettings
+    let showSettings: () -> Void
+    let resize: (Bool) -> Void
 
     /// 列表相对时间的基准时刻，每分钟推进一次
     @State private var now = Date()
@@ -28,7 +28,7 @@ struct PanelView: View {
             }
         }
         .frame(height: 480)
-        .background(PanelWindowSizeEnforcer())
+        .onChange(of: expanded) { _, value in resize(value) }
         .onReceive(minuteTicker) { now = $0 }
         .onAppear {
             // 面板视图跨次打开会复用，重开时先把基准时刻拉回当下
@@ -57,10 +57,7 @@ struct PanelView: View {
             .help("全部标为已读")
             Menu {
                 Button("设置…") {
-                    // LSUIElement 应用无 Dock 图标，设置窗口不会自动前置，
-                    // 打开前必须先把应用激活到前台
-                    NSApp.activate(ignoringOtherApps: true)
-                    openSettings()
+                    showSettings()
                 }
                 Button("重新检查连接") {
                     Task { await model.refresh() }
@@ -147,49 +144,6 @@ struct PanelView: View {
         case .checking: "正在连接…"
         case .connected: "暂无消息"
         case .unconfigured(let hint), .reconnecting(let hint), .failed(let hint): hint
-        }
-    }
-}
-
-/// 兜底：MenuBarExtra .window 的宿主窗口在某些真实交互路径下（如展开详情后点击面板
-/// 外部关闭）不跟随内容收窄，重开时残留 641pt 宽的空白窗口，内容 360pt 居中其中，
-/// 四周露出一圈"鬼影"。作为面板内容的 background，本视图尺寸恒等于内容尺寸；
-/// 布局时发现窗口 frame 与内容不一致，就把窗口对齐回内容大小（保持顶边与水平中心）。
-/// 正常 resize 路径下尺寸一致，此处为空操作。
-private struct PanelWindowSizeEnforcer: NSViewRepresentable {
-    func makeNSView(context: Context) -> EnforcerView { EnforcerView() }
-    func updateNSView(_ nsView: EnforcerView, context: Context) {}
-
-    final class EnforcerView: NSView {
-        override func layout() {
-            super.layout()
-            enforce()
-        }
-
-        override func viewDidMoveToWindow() {
-            super.viewDidMoveToWindow()
-            enforce()
-        }
-
-        private func enforce() {
-            // 异步执行：等本轮布局落定，避免与 AppKit 自身的窗口调整互相打架
-            DispatchQueue.main.async { [weak self] in
-                guard let self, let window = self.window else { return }
-                let target = self.bounds.size
-                guard target.width > 0, target.height > 0,
-                      window.frame.size != target else { return }
-                let frame = window.frame
-                window.setFrame(
-                    NSRect(
-                        x: frame.midX - target.width / 2,
-                        y: frame.maxY - target.height,
-                        width: target.width,
-                        height: target.height
-                    ),
-                    display: true
-                )
-                window.invalidateShadow()
-            }
         }
     }
 }
