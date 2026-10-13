@@ -21,6 +21,7 @@ final class AppModel {
     private(set) var apps: [Int: GotifyApplication] = [:]
     /// nil = 单栏列表；非 nil = 双栏并选中该消息
     var selectedMessageID: Int?
+    var panelPresentationID = UUID()
     /// 刷新进行中；UI 据此禁用「重新检查连接」，防止连点并发起多条 WebSocket
     private(set) var isRefreshing = false
 

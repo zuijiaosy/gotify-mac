@@ -53,6 +53,10 @@ import SwiftUI
         let configURL = directory.appendingPathComponent("config.json")
         var store = MessageStore()
         _ = store.insert(GotifyMessage(id: 12, appid: 1, title: "快捷键验收消息", message: "用于验证面板展开与收起。", priority: 5, date: Date()))
+        for messageID in 1..<12 {
+            _ = store.insert(GotifyMessage(id: messageID, appid: 1, title: "历史验收消息 \(messageID)",
+                                          message: "用于验证关闭后重新打开时回到最新消息。", priority: 1, date: Date()))
+        }
         let model = AppModel(autoStart: false, initialStore: store, configURL: configURL)
         let registrar = SmokeRegistrar()
         let controller = MenuBarController(model: model, registrar: registrar)
@@ -64,10 +68,20 @@ import SwiftUI
         try check(controller.popover.isShown, "Panel did not open")
         try check(controller.popover.contentSize.width == 360, "Incorrect single-column width")
         try snapshot(controller.popover.contentViewController!.view, name: "panel-single")
+        try await scrollToOlderMessages(controller)
+        registrar.onPress?(.togglePanel)
+        try await settle()
+        try check(!controller.popover.isShown, "Shortcut did not hide panel")
+        controller.item.button?.performClick(nil)
+        try await settle()
+        try check(controller.popover.isShown, "Mouse did not reopen panel")
+        let mouseReopenedList = try messageScrollView(controller)
+        try check(abs(distanceFromTop(mouseReopenedList)) < 1, "Mouse reopening did not show the newest message")
         model.selectedMessageID = 12
         try await settle()
         try check(controller.popover.contentSize.width == 641, "Incorrect expanded width")
         try snapshot(controller.popover.contentViewController!.view, name: "panel-expanded")
+        try await scrollToOlderMessages(controller)
 
         controller.item.button?.performClick(nil)
         try await settle()
@@ -80,6 +94,8 @@ import SwiftUI
         registrar.onPress?(.togglePanel)
         try await settle()
         try check(controller.popover.contentSize.width == 360, "Reopened panel did not reset its width")
+        let shortcutReopenedList = try messageScrollView(controller)
+        try check(abs(distanceFromTop(shortcutReopenedList)) < 1, "Shortcut reopening did not show the newest message")
         controller.showSettings()
         NSApp.appearance = nil
         try await settle()
@@ -99,6 +115,43 @@ import SwiftUI
         shortcuts.cancelRecording()
         try check(registrar.active.count == 2, "Cancellation did not restore hotkeys")
         shortcuts.stop()
+    }
+
+    private func messageScrollView(_ controller: MenuBarController) throws -> NSScrollView {
+        func scrollViews(in view: NSView) -> [NSScrollView] {
+            let current = (view as? NSScrollView).map { [$0] } ?? []
+            return current + view.subviews.flatMap { scrollViews(in: $0) }
+        }
+        let rootView = controller.popover.contentViewController!.view
+        rootView.layoutSubtreeIfNeeded()
+        guard let scrollView = scrollViews(in: rootView).min(by: {
+            $0.convert($0.bounds, to: rootView).minX < $1.convert($1.bounds, to: rootView).minX
+        }), scrollView.documentView != nil else {
+            throw NSError(domain: "ShortcutUISmoke", code: 5,
+                          userInfo: [NSLocalizedDescriptionKey: "Message list scroll view was not found"])
+        }
+        return scrollView
+    }
+
+    private func distanceFromTop(_ scrollView: NSScrollView) -> CGFloat {
+        let documentView = scrollView.documentView!
+        let visibleRect = scrollView.documentVisibleRect
+        return documentView.isFlipped
+            ? visibleRect.minY - documentView.bounds.minY
+            : documentView.bounds.maxY - visibleRect.maxY
+    }
+
+    private func scrollToOlderMessages(_ controller: MenuBarController) async throws {
+        let scrollView = try messageScrollView(controller)
+        let documentView = scrollView.documentView!
+        let clipView = scrollView.contentView
+        let olderOrigin = documentView.isFlipped
+            ? documentView.frame.maxY - clipView.bounds.height
+            : documentView.frame.minY
+        clipView.scroll(to: NSPoint(x: clipView.bounds.minX, y: olderOrigin))
+        scrollView.reflectScrolledClipView(clipView)
+        try await settle()
+        try check(distanceFromTop(scrollView) > 1, "Message list did not scroll to older messages")
     }
 
     private func checkCarbonEvents() throws {

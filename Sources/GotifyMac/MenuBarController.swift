@@ -82,6 +82,7 @@ final class MenuBarController: NSObject, NSPopoverDelegate, NSWindowDelegate {
             popover.performClose(nil)
         } else if let button = item.button {
             model.selectedMessageID = nil
+            model.panelPresentationID = UUID()
             resizePanel(expanded: false)
             NSApp.activate(ignoringOtherApps: true)
             popover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)

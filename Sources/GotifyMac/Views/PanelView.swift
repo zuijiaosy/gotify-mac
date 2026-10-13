@@ -19,6 +19,7 @@ struct PanelView: View {
             Divider()
             HStack(spacing: 0) {
                 messageList
+                    .id(model.panelPresentationID)
                     .frame(width: expanded ? 240 : 360)
                 if expanded {
                     Divider()
