@@ -309,3 +309,31 @@ SwiftUI `MenuBarExtra` 没有公开的面板显示控制接口，因此使用 Ap
 - 快捷键按物理键位保存并以 ANSI 名称展示。系统独占注册冲突可以检测；系统保留键和其他软件的非独占键盘监听无法保证全部检测。
 - AppKit 生命周期接管后显式提供设置、退出与标准编辑菜单，保证输入框复制/粘贴功能。
 - 原生 UI 行为需桌面会话验证；单测使用虚构消息、临时配置和模拟注册器，避免触碰真实消息和用户快捷键。
+
+## ADR-016：系统通知改用 osascript display notification
+
+- Status: Accepted
+- Date: 2026-10-16
+
+### Decision
+
+将系统通知实现从 `UNUserNotificationCenter` 切换到通过 `osascript display notification` 发送横幅。bundle ID 保持 `com.zuijiaosy.GotifyMac` 不变。
+
+「设置 → 通用」新增「新消息弹出系统通知」开关，读写 config.json 的 `notificationsEnabled` 字段（字段已存在），默认开启。
+
+### Rationale
+
+macOS 26/27 实测全程排查：
+
+1. `UNUserNotificationCenter`：ad-hoc 签名下 `requestAuthorization` 直接返回 `Notifications are not allowed for this application`，且本机 `com.zuijiaosy.GotifyMac` 在 ADR-012 排查期间留有永久拒绝记录，无法通过 `tccutil` 或代码清除（需要 SIP 豁免权限）。
+2. `NSUserNotificationCenter`：ad-hoc 签名下系统通知守护进程不处理投递请求，授权询问弹窗始终未出现。
+3. `osascript display notification`：实测从 `/Applications` 路径运行的 .app 进程里调用 `/usr/bin/osascript` 可以正常弹出横幅，无需额外授权。单引号语法（`'...'`）会触发 AppleScript 解析错误（`-2741`），改用双引号加转义后正常工作。
+
+通知内容与主界面列表行一致：标题「应用名: 消息标题」，正文为 `message.previewText`（纯文本摘要，Markdown 已剥标记）。
+
+### Consequences
+
+- 横幅图标显示为「脚本编辑器」而非 Gotify Mac 自身图标；点击横幅会激活脚本编辑器，不会打开 Gotify Mac 面板——用户需自行打开面板查看详情。这是 ad-hoc 签名下 osascript 方案的固有限制。
+- 没有"通知中心"里的通知记录（osascript 不写入 UNUserNotificationCenter 数据库）。
+- 若 Apple 在未来 macOS 限制 osascript 跨进程通知，需重新评估（届时 ad-hoc 通知授权可能也已放开）。
+- 对其他用户（证书签名或无拒绝记录者）：osascript 同样可用，行为一致。

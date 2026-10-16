@@ -3,6 +3,7 @@ import SwiftUI
 
 /// 通用设置即时生效；登录启动状态由系统管理，快捷键写入配置。
 struct GeneralSettingsTab: View {
+    let model: AppModel
     let shortcuts: GlobalShortcuts
     @State private var launchAtLogin = false
     @State private var hint: String?
@@ -18,6 +19,12 @@ struct GeneralSettingsTab: View {
                         .font(.caption)
                 }
                 Text("菜单栏应用没有 Dock 图标，开启后会在登录时静默启动到菜单栏")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            Section {
+                Toggle("新消息弹出系统通知", isOn: notificationsBinding)
+                Text("通知只显示应用名、标题和摘要；首次弹出时系统会询问是否允许")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -56,6 +63,17 @@ struct GeneralSettingsTab: View {
         .formStyle(.grouped)
         .onAppear(perform: syncFromSystem)
         .onDisappear { shortcuts.cancelRecording() }
+    }
+
+    private var notificationsBinding: Binding<Bool> {
+        Binding(
+            get: { model.config.notificationsEnabled },
+            set: { enabled in
+                var new = model.config
+                new.notificationsEnabled = enabled
+                model.saveConfig(new)
+            }
+        )
     }
 
     /// 系统才是真值：用户可能在系统设置里改过，每次出现都重新读

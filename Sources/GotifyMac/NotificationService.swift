@@ -1,14 +1,14 @@
 import Foundation
 import Observation
-import UserNotifications
 
-/// 系统通知封装。裸二进制（swift run / 测试进程）没有 .app bundle，
-/// 直接调 UNUserNotificationCenter 会崩溃，setUp 里必须先做 bundle 检查。
+/// 系统通知封装（ADR-016）。macOS 26/27 对 ad-hoc 签名的应用封锁了
+/// UNUserNotificationCenter 的直接授权，改用 osascript display notification
+/// 通过 ScriptingAdditions 发横幅，无需额外权限即可工作。
+/// 裸二进制（swift run / 测试进程）没有 .app bundle，投递前做 bundle 检查。
 @MainActor
 @Observable
-final class NotificationService: NSObject, UNUserNotificationCenterDelegate {
+final class NotificationService {
     private(set) var available = false
-    /// 非空表示通知不可用及原因（UI 已不展示，见 ADR-012，仅内部/测试使用）
     private(set) var statusHint = ""
 
     func setUp() async {
@@ -17,39 +17,27 @@ final class NotificationService: NSObject, UNUserNotificationCenterDelegate {
             statusHint = "非 .app 运行，通知不可用"
             return
         }
-        let center = UNUserNotificationCenter.current()
-        center.delegate = self
-        do {
-            available = try await center.requestAuthorization(options: [.alert, .sound])
-            if !available {
-                statusHint = "通知被拒绝，请在 系统设置→通知 中开启"
-            }
-        } catch {
-            statusHint = "通知授权失败：\(error.localizedDescription)"
-        }
+        available = true
     }
 
-    /// 调用方保证只对真正新增的消息调用（MessageStore.insert 返回 true）
+    /// 调用方保证只对真正新增的消息调用（MessageStore.insert 返回 true）。
+    /// 内容与主界面列表行一致：应用名 + 标题 + 正文摘要，不含详情。
     func post(_ message: GotifyMessage, appName: String, sound: Bool = true) {
         guard available else { return }
-        let content = UNMutableNotificationContent()
-        content.title = "\(appName): \(message.displayTitle)"
-        content.body = message.previewText
-        content.sound = sound ? .default : nil
-        let request = UNNotificationRequest(
-            identifier: "gotify-message-\(message.id)",  // 同 id 不重复通知的兜底
-            content: content,
-            trigger: nil
-        )
-        UNUserNotificationCenter.current().add(request)
-    }
-
-    /// 应用在前台时也展示横幅（默认会被系统静默吞掉）
-    nonisolated func userNotificationCenter(
-        _ center: UNUserNotificationCenter,
-        willPresent notification: UNNotification,
-        withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void
-    ) {
-        completionHandler([.banner, .sound])
+        let title = "\(appName): \(message.displayTitle)"
+        let body = message.previewText
+        // AppleScript 用双引号界定字符串，转义内部的反斜杠和双引号
+        func esc(_ s: String) -> String {
+            s.replacingOccurrences(of: "\\", with: "\\\\")
+             .replacingOccurrences(of: "\"", with: "\\\"")
+        }
+        let soundClause = sound ? " sound name \"default\"" : ""
+        let script = "display notification \"\(esc(body))\" with title \"\(esc(title))\"\(soundClause)"
+        let task = Process()
+        task.launchPath = "/usr/bin/osascript"
+        task.arguments  = ["-e", script]
+        task.standardOutput = FileHandle.nullDevice
+        task.standardError  = FileHandle.nullDevice
+        try? task.run()
     }
 }

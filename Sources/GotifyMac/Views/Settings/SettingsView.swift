@@ -9,7 +9,7 @@ struct SettingsView: View {
         TabView {
             ServerSettingsTab(model: model)
                 .tabItem { Label("服务器", systemImage: "server.rack") }
-            GeneralSettingsTab(shortcuts: shortcuts)
+            GeneralSettingsTab(model: model, shortcuts: shortcuts)
                 .tabItem { Label("通用", systemImage: "gearshape") }
         }
         .frame(width: 440)

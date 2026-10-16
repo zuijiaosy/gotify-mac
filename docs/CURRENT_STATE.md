@@ -1,8 +1,10 @@
 # Current State
 
-Updated: 2026-10-12
+Updated: 2026-10-16
 
 ## Completed
+
+- **新消息系统通知横幅（2026-10-16，ADR-016）**：收到新消息时通过 `osascript display notification` 弹出系统横幅，标题「应用名: 消息标题」，正文为列表行摘要（与主界面一致）。「设置 → 通用」新增「新消息弹出系统通知」开关，即时写入 config.json 的 `notificationsEnabled` 字段，默认开启。点击横幅后需自行打开主界面查看详情。ad-hoc 签名下 UNUserNotificationCenter 授权被系统拒绝，NSUserNotificationCenter 投递也被静默，改用 osascript 绕过该限制，实测 `/Applications` 路径下可正常弹出横幅。95 项单元测试通过。未替换已安装应用。
 
 - **重新打开面板回到最新消息（2026-10-12）**：菜单栏图标和全局快捷键共用打开入口，每次打开时更新展示标识并重建消息列表，清除上次浏览旧消息留下的滚动位置。面板保持打开时，查看旧消息、切换详情和全部已读不会触发该重置。95 项单元测试通过；`bash scripts/shortcut-ui-smoke.sh` 使用虚构消息验证单栏、双栏滚到旧消息后，分别通过图标和快捷键重开时实际滚动位置回到顶部，原有尺寸、白底、全部已读、设置与 Carbon 检查也通过。独立副本移除列表展示标识后，回归检查检出重开未回到最新消息的问题。跨应用物理按键与点击外部关闭仍待手工验收。**v0.3.2 已发布**：提交 `3c51136`，Release workflow 测试、双架构构建与 DMG 发布全部成功，产物 `Gotify-Mac-0.3.2.dmg`，<https://github.com/zuijiaosy/gotify-mac/releases/tag/v0.3.2>。未替换已安装应用。
 
