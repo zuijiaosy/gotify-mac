@@ -1,8 +1,12 @@
 # Current State
 
-Updated: 2026-10-16
+Updated: 2026-11-25
 
 ## Completed
+
+- **界面改版（2026-11-25，v0.4.0）**：让 Gemini 4 Neon 与 Claude Opus 5.5 在独立 worktree 各出一版 UI 优化，用户对比截图后选定 Neon 版并实机试用后再调整。面板：单行工具栏（标题 + 未读数胶囊 + 连接状态胶囊 + 全部已读 + 齿轮菜单，齿轮去掉打开时的蓝色焦点框）；列表行只显示「优先级色点 + 应用名 + 时间」和标题两行，未读蓝点在标题左侧独立轨道，**不再显示正文摘要**（用户实测真实消息正文很长、列表过密），无标题消息用正文首段折叠成一行代替「（无标题）」；行间缩进细分隔线、悬停/选中态。详情：图标容器 + 标题 + 应用名·完整时间 + 优先级胶囊，正文字号行距放大，「复制内容」点击后短暂显示「已复制」。设置：服务器标签分组 + Token 显示/隐藏切换 + 未保存提示 + 测试结果独立一行；通用标签开关带副标题、快捷键键帽式录入控件。新增 `Views/PanelTheme.swift` 收拢面板与设置共用的颜色和按钮样式。系统通知横幅正文仍用 `previewText` 摘要，不受列表改动影响。
+  另修复 `scripts/shortcut-ui-smoke.swift` 在 `536af69` 后无法编译（`GeneralSettingsTab` 新增 `model` 参数未同步）。
+  验证：95 项单元测试通过，release 构建通过，已替换安装 `/Applications` 并由用户实机确认。**已知问题**：本机菜单栏右侧图标过满时，冒烟脚本新建的 `NSStatusItem` 宿主窗口高度为 0、`popover.show` 失败（"Panel did not open"），与 UI 改动无关，本次冒烟脚本未能完整跑通；README 截图改用离屏渲染真实 View + 虚构消息生成（`panel-list.png`、`panel-detail.png`、`settings-server.png`）。
 
 - **新消息系统通知横幅（2026-10-16，ADR-016）**：收到新消息时通过 `osascript display notification` 弹出系统横幅，标题「应用名: 消息标题」，正文为列表行摘要（与主界面一致）。「设置 → 通用」新增「新消息弹出系统通知」开关，即时写入 config.json 的 `notificationsEnabled` 字段，默认开启。点击横幅后需自行打开主界面查看详情。ad-hoc 签名下 UNUserNotificationCenter 授权被系统拒绝，NSUserNotificationCenter 投递也被静默，改用 osascript 绕过该限制，实测 `/Applications` 路径下可正常弹出横幅。95 项单元测试通过。未替换已安装应用。
 

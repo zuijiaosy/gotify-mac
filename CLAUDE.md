@@ -47,7 +47,7 @@ scripts/e2e-ui-check.sh        # 半自动端到端 UI 验证（需终端有辅�
 ## 代码布局
 
 - `Package.swift` — executable target `GotifyMac` + testTarget `GotifyMacTests`，platforms 定为 `.macOS(.v14)`。
-- `Sources/GotifyMac/` — `GotifyMacApp.swift`（`MenuBarExtra` .window 入口）、`AppConfig.swift`（config.json 读取）、`AppModel.swift`（协调者：连接状态机/流生命周期/选中态）、`GotifyClient.swift`（REST）、`GotifyStream.swift`（WebSocket + 重连退避）、`MessageStore.swift`（去重/降序/200 条上限）、`NotificationService.swift`（系统通知）、`Views/`（PanelView/MessageRowView/MessageDetailView）。
+- `Sources/GotifyMac/` — `GotifyMacApp.swift`（`MenuBarExtra` .window 入口）、`AppConfig.swift`（config.json 读取）、`AppModel.swift`（协调者：连接状态机/流生命周期/选中态）、`GotifyClient.swift`（REST）、`GotifyStream.swift`（WebSocket + 重连退避）、`MessageStore.swift`（去重/降序/200 条上限）、`NotificationService.swift`（系统通知）、`Views/`（PanelView/MessageRowView/MessageDetailView/PanelTheme 共享样式，`Settings/` 设置标签）。
 - `Tests/GotifyMacTests/` — Swift Testing 单元测试 + `GOTIFY_E2E=1` 门控的集成测试。
 - `Support/Info.plist` — bundle 配置（`LSUIElement=true` 隐藏 Dock 图标）。
 - `scripts/` — `build-app.sh`（组装 .app，`APP_VERSION`/`APP_BUILD`/`APP_ARCHS` 可覆盖版本与架构）、`make-dmg.sh`（打 DMG）、`test.sh`（测试包装）、`e2e-ui-check.sh`（半自动 UI 验证）。

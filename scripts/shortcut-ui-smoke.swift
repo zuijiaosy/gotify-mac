@@ -107,7 +107,7 @@ import SwiftUI
         let shortcuts = GlobalShortcuts(registrar: registrar, save: { _ in }, perform: { _ in })
         shortcuts.start(config: .default)
         let window = controller.settingsWindow!
-        window.contentViewController = NSHostingController(rootView: GeneralSettingsTab(shortcuts: shortcuts).frame(width: 440, height: 420))
+        window.contentViewController = NSHostingController(rootView: GeneralSettingsTab(model: model, shortcuts: shortcuts).frame(width: 440, height: 420))
         try await settle()
         try snapshot(window.contentView!, name: "settings-shortcuts")
         shortcuts.beginRecording(.togglePanel)
